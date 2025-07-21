@@ -20,8 +20,20 @@ func InitializeDefaultConfig() error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	// Create configs subdirectory
+	configsDir := filepath.Join(configDir, "configs")
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create configs directory: %w", err)
+	}
+
+	// Create SSH directory
+	sshDir := filepath.Join(configDir, "ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		return fmt.Errorf("failed to create SSH directory: %w", err)
+	}
+
 	// Create client config if it doesn't exist
-	clientConfigPath := filepath.Join(configDir, "client.yaml")
+	clientConfigPath := filepath.Join(configsDir, "client.yaml")
 	if _, err := os.Stat(clientConfigPath); os.IsNotExist(err) {
 		if err := createDefaultClientConfig(clientConfigPath); err != nil {
 			return fmt.Errorf("failed to create default client config: %w", err)
@@ -29,10 +41,20 @@ func InitializeDefaultConfig() error {
 	}
 
 	// Create server config if it doesn't exist
-	serverConfigPath := filepath.Join(configDir, "server.yaml")
+	serverConfigPath := filepath.Join(configsDir, "server.yaml")
 	if _, err := os.Stat(serverConfigPath); os.IsNotExist(err) {
 		if err := createDefaultServerConfig(serverConfigPath); err != nil {
 			return fmt.Errorf("failed to create default server config: %w", err)
+		}
+	}
+
+	// Create symlink for backward compatibility
+	legacyClientConfigPath := filepath.Join(configDir, "client.yaml")
+	if _, err := os.Stat(legacyClientConfigPath); os.IsNotExist(err) {
+		// Create relative symlink
+		if err := os.Symlink("configs/client.yaml", legacyClientConfigPath); err != nil {
+			// Non-fatal error, just log it
+			fmt.Printf("Warning: Failed to create symlink for backward compatibility: %v\n", err)
 		}
 	}
 
