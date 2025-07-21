@@ -1,0 +1,36 @@
+# DockBridge Server Configuration
+# This file contains default configuration for the DockBridge server
+# Configuration files are loaded from ~/.dockbridge/configs/ by default
+
+# Docker configuration
+docker:
+  # Path to Docker socket
+  socket_path: "/var/run/docker.sock"
+  
+  # Port for Docker proxy to listen on
+  proxy_port: 2376
+
+# Keep-alive configuration
+keepalive:
+  # Interval between heartbeat messages
+  interval: "30s"
+  
+  # Timeout before server self-destructs without heartbeat
+  timeout: "5m"
+  
+  # Interval between retry attempts
+  retry_interval: "5s"
+  
+  # Maximum number of retry attempts
+  max_retries: 3
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, error, fatal
+  level: "info"
+  
+  # Log format: json, text
+  format: "json"
+  
+  # Log output: stdout, stderr, or file path
+  output: "stdout"

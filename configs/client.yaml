@@ -1,0 +1,64 @@
+# DockBridge Client Configuration
+# This file contains default configuration for the DockBridge client
+# Configuration files are loaded from ~/.dockbridge/configs/ by default
+
+# Hetzner Cloud configuration
+hetzner:
+  # API token for Hetzner Cloud (can also be set via HETZNER_API_TOKEN env var)
+  api_token: ""
+  
+  # Server type to provision (see Hetzner Cloud documentation for available types)
+  server_type: "cpx21"
+  
+  # Location/datacenter for the server
+  location: "fsn1"
+  
+  # Volume size in GB (minimum 10, maximum 10000)
+  volume_size: 10
+
+# Docker configuration
+docker:
+  # Path to Docker socket
+  socket_path: "/var/run/docker.sock"
+  
+  # Port for Docker proxy to listen on
+  proxy_port: 2376
+
+# Keep-alive configuration
+keepalive:
+  # Interval between heartbeat messages
+  interval: "30s"
+  
+  # Timeout before server self-destructs without heartbeat
+  timeout: "5m"
+  
+  # Interval between retry attempts
+  retry_interval: "5s"
+  
+  # Maximum number of retry attempts
+  max_retries: 3
+
+# SSH configuration
+ssh:
+  # Path to SSH private key (will be generated if doesn't exist)
+  key_path: "~/.dockbridge/ssh/id_rsa"
+  
+  # SSH port
+  port: 22
+  
+  # SSH connection timeout
+  timeout: "30s"
+  
+  # SSH keep-alive interval
+  keep_alive: "30s"
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, error, fatal
+  level: "info"
+  
+  # Log format: json, text
+  format: "json"
+  
+  # Log output: stdout, stderr, or file path
+  output: "stdout"
