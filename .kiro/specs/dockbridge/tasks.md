@@ -31,7 +31,7 @@
   - Write unit tests for error handling and logging functionality
   - _Requirements: 7.1, 7.2, 7.3, 9.1, 9.3_
 
-- [ ] 5. Create SSH client wrapper and key management
+- [x] 5. Create SSH client wrapper and key management
   - Implement SSH client wrapper using golang.org/x/crypto/ssh in internal/client/ssh/
   - Create SSH key generation functions with RSA 4096-bit key support
   - Implement secure key storage and loading with proper file permissions
@@ -39,7 +39,7 @@
   - Write unit tests for SSH operations and key management
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 6. Build Hetzner Cloud API client
+- [x] 6. Build Hetzner Cloud API client
   - Implement Hetzner API client wrapper using hcloud-go library in internal/client/hetzner/
   - Create server provisioning functions with Docker CE image and cloud-init scripts
   - Implement volume creation, attachment, and management operations
