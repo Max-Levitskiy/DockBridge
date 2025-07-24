@@ -188,8 +188,6 @@ func EnsureKeyPairExists(keyPath string, bits int) error {
 
 // GetPublicKeyString returns the public key as a string in the authorized_keys format
 func GetPublicKeyString(keyPath string) (string, error) {
-	km := NewKeyManager()
-
 	// If the path is a private key, append .pub to get the public key path
 	if !strings.HasSuffix(keyPath, ".pub") {
 		keyPath = keyPath + ".pub"

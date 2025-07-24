@@ -19,7 +19,7 @@ type Client interface {
 	Close() error
 
 	// CreateTunnel creates an SSH tunnel from local to remote
-	CreateTunnel(ctx context.Context, localAddr, remoteAddr string) (*Tunnel, error)
+	CreateTunnel(ctx context.Context, localAddr, remoteAddr string) (TunnelInterface, error)
 
 	// ExecuteCommand runs a command on the remote server
 	ExecuteCommand(ctx context.Context, command string) ([]byte, error)
@@ -150,7 +150,7 @@ func (c *clientImpl) Close() error {
 }
 
 // CreateTunnel creates an SSH tunnel from local to remote
-func (c *clientImpl) CreateTunnel(ctx context.Context, localAddr, remoteAddr string) (*Tunnel, error) {
+func (c *clientImpl) CreateTunnel(ctx context.Context, localAddr, remoteAddr string) (TunnelInterface, error) {
 	if !c.connected || c.sshClient == nil {
 		return nil, errors.New("not connected to SSH server")
 	}

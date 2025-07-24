@@ -3,9 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
-	"time"
 
 	clientconfig "github.com/dockbridge/dockbridge/internal/client/config"
+	"github.com/dockbridge/dockbridge/internal/client/hetzner"
 	internalconfig "github.com/dockbridge/dockbridge/internal/config"
 	"github.com/dockbridge/dockbridge/pkg/errors"
 	"github.com/dockbridge/dockbridge/pkg/logger"
@@ -20,8 +20,8 @@ var serverCmd = &cobra.Command{
 
 var serverCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a new Hetzner Cloud server",
-	Long:  `Provision a new Hetzner Cloud server with Docker CE installed.`,
+	Short: "Initialize and validate server configuration",
+	Long:  `Initialize and validate server configuration. Servers are automatically provisioned when Docker commands are executed.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config")
 		logConfigPath, _ := cmd.Flags().GetString("log-config")
@@ -37,8 +37,8 @@ var serverCreateCmd = &cobra.Command{
 
 var serverDestroyCmd = &cobra.Command{
 	Use:   "destroy",
-	Short: "Destroy a Hetzner Cloud server",
-	Long:  `Destroy a Hetzner Cloud server while preserving volumes.`,
+	Short: "Destroy DockBridge servers",
+	Long:  `Destroy all DockBridge servers while preserving volumes for future use.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config")
 		logConfigPath, _ := cmd.Flags().GetString("log-config")
@@ -55,8 +55,8 @@ var serverDestroyCmd = &cobra.Command{
 
 var serverStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Check server status",
-	Long:  `Check the status of the Hetzner Cloud server.`,
+	Short: "Check DockBridge server status",
+	Long:  `Check the status of all DockBridge servers and volumes.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config")
 		logConfigPath, _ := cmd.Flags().GetString("log-config")
@@ -91,10 +91,8 @@ func init() {
 }
 
 func createServer(ctx context.Context, configPath string) error {
-	log := logger.GlobalWithField("operation", "server_create")
-	log.Info("Starting server creation process")
-
-	// Use context in the future for cancellation and timeouts
+	log := logger.GlobalWithField("operation", "server_config_init")
+	log.Info("Initializing server configuration")
 
 	// Load configuration
 	manager := clientconfig.NewManager()
@@ -105,47 +103,55 @@ func createServer(ctx context.Context, configPath string) error {
 
 	cfg := manager.GetConfig()
 
-	log.WithFields(map[string]any{
-		"server_type": cfg.Hetzner.ServerType,
-		"location":    cfg.Hetzner.Location,
-		"volume_size": cfg.Hetzner.VolumeSize,
-	}).Info("Creating Hetzner Cloud server")
+	fmt.Println("DockBridge Server Configuration:")
+	fmt.Println("================================")
+	fmt.Printf("Server Type: %s\n", cfg.Hetzner.ServerType)
+	fmt.Printf("Location: %s\n", cfg.Hetzner.Location)
+	fmt.Printf("Volume Size: %d GB\n", cfg.Hetzner.VolumeSize)
+	fmt.Printf("Docker API Port: %d\n", cfg.Docker.ProxyPort)
+	fmt.Printf("SSH Key Path: %s\n", cfg.SSH.KeyPath)
+	fmt.Println()
 
-	fmt.Println("Creating Hetzner Cloud server...")
-	fmt.Println("Server Type:", cfg.Hetzner.ServerType)
-	fmt.Println("Location:", cfg.Hetzner.Location)
-	fmt.Println("Volume Size:", cfg.Hetzner.VolumeSize, "GB")
-
-	// Placeholder for actual server creation logic
-	// In a real implementation, we would:
-	// 1. Call Hetzner API to create server
-	// 2. Wait for server to be ready
-	// 3. Install Docker CE
-	// 4. Configure SSH access
-	// 5. Attach volume
-
-	// Simulate server creation with retry logic
-	err := errors.Retry(func() error {
-		// Simulate API call
-		time.Sleep(1 * time.Second)
-
-		// Simulate successful creation
+	// Validate Hetzner API token
+	if cfg.Hetzner.APIToken == "" {
+		fmt.Println("⚠️  Warning: Hetzner API token not configured.")
+		fmt.Println("   Set HETZNER_API_TOKEN environment variable or add to config file.")
 		return nil
-
-		// In case of failure, we would return a retryable error:
-		// return errors.NewNetworkError("API_ERROR", "Failed to create server", err, true)
-	}, errors.APIRetryConfig())
-
-	if err != nil {
-		errors.LogError(err, "Failed to create Hetzner Cloud server")
-		return err
 	}
 
-	serverIP := "203.0.113.10" // Placeholder IP
+	// Test Hetzner API connection
+	fmt.Println("Testing Hetzner Cloud API connection...")
+	hetznerConfig := &hetzner.Config{
+		APIToken:   cfg.Hetzner.APIToken,
+		ServerType: cfg.Hetzner.ServerType,
+		Location:   cfg.Hetzner.Location,
+		VolumeSize: cfg.Hetzner.VolumeSize,
+	}
 
-	log.WithField("server_ip", serverIP).Info("Server created successfully")
-	fmt.Println("Server created successfully!")
-	fmt.Println("Server IP:", serverIP)
+	client, err := hetzner.NewClient(hetznerConfig)
+	if err != nil {
+		fmt.Printf("❌ Failed to create Hetzner client: %v\n", err)
+		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Failed to create Hetzner client", err)
+	}
+
+	// Test API by listing servers
+	_, err = client.ListServers(ctx)
+	if err != nil {
+		fmt.Printf("❌ Failed to connect to Hetzner API: %v\n", err)
+		return errors.NewNetworkError("API_ERROR", "Failed to connect to Hetzner API", err, true)
+	}
+
+	fmt.Println("✅ Hetzner Cloud API connection successful!")
+
+	log.Info("Server configuration validated successfully")
+	fmt.Println()
+	fmt.Println("Configuration is valid!")
+	fmt.Println("Servers will be automatically created when Docker commands are executed.")
+	fmt.Println()
+	fmt.Println("Next steps:")
+	fmt.Println("  1. Start the DockBridge client: dockbridge-client start")
+	fmt.Println("  2. Run Docker commands normally - servers will auto-provision")
+	fmt.Println("  3. Check server status: dockbridge-client server status")
 
 	return nil
 }
@@ -156,11 +162,64 @@ func destroyServer(ctx context.Context, configPath string, force bool) error {
 		"force":     force,
 	})
 
-	// Use context in the future for cancellation and timeouts
 	log.Info("Starting server destruction process")
 
+	// Load configuration
+	manager := clientconfig.NewManager()
+	if err := manager.Load(configPath); err != nil {
+		errors.LogError(err, "Failed to load configuration")
+		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Failed to load configuration", err)
+	}
+
+	cfg := manager.GetConfig()
+
+	// Validate Hetzner API token
+	if cfg.Hetzner.APIToken == "" {
+		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Hetzner API token is required", nil)
+	}
+
+	// Create Hetzner client
+	hetznerConfig := &hetzner.Config{
+		APIToken:   cfg.Hetzner.APIToken,
+		ServerType: cfg.Hetzner.ServerType,
+		Location:   cfg.Hetzner.Location,
+		VolumeSize: cfg.Hetzner.VolumeSize,
+	}
+
+	client, err := hetzner.NewClient(hetznerConfig)
+	if err != nil {
+		errors.LogError(err, "Failed to create Hetzner client")
+		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Failed to create Hetzner client", err)
+	}
+
+	// List servers to find DockBridge servers
+	servers, err := client.ListServers(ctx)
+	if err != nil {
+		errors.LogError(err, "Failed to list servers")
+		return errors.NewNetworkError("API_ERROR", "Failed to list servers", err, true)
+	}
+
+	// Filter for DockBridge servers
+	var dockbridgeServers []*hetzner.Server
+	for _, server := range servers {
+		if len(server.Name) >= 10 && server.Name[:10] == "dockbridge" {
+			dockbridgeServers = append(dockbridgeServers, server)
+		}
+	}
+
+	if len(dockbridgeServers) == 0 {
+		fmt.Println("No DockBridge servers found to destroy.")
+		return nil
+	}
+
+	// Show servers that will be destroyed
+	fmt.Println("DockBridge servers found:")
+	for _, server := range dockbridgeServers {
+		fmt.Printf("  - %s (ID: %d, IP: %s)\n", server.Name, server.ID, server.IPAddress)
+	}
+
 	if !force {
-		fmt.Print("Are you sure you want to destroy the server? This action cannot be undone. (y/N): ")
+		fmt.Print("\nAre you sure you want to destroy these servers? Volumes will be preserved. (y/N): ")
 		var confirm string
 		fmt.Scanln(&confirm)
 		if confirm != "y" && confirm != "Y" {
@@ -170,42 +229,30 @@ func destroyServer(ctx context.Context, configPath string, force bool) error {
 		}
 	}
 
-	// Load configuration
-	manager := clientconfig.NewManager()
-	if err := manager.Load(configPath); err != nil {
-		errors.LogError(err, "Failed to load configuration")
-		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Failed to load configuration", err)
+	// Create lifecycle manager
+	lifecycleManager := hetzner.NewLifecycleManager(client)
+
+	log.Info("Destroying Hetzner Cloud servers")
+	fmt.Println("Destroying DockBridge servers...")
+
+	// Destroy each server
+	for _, server := range dockbridgeServers {
+		fmt.Printf("Destroying server %s...\n", server.Name)
+
+		err := lifecycleManager.DestroyServerWithCleanup(ctx, fmt.Sprintf("%d", server.ID), true)
+		if err != nil {
+			errors.LogError(err, fmt.Sprintf("Failed to destroy server %s", server.Name))
+			fmt.Printf("Failed to destroy server %s: %v\n", server.Name, err)
+			continue
+		}
+
+		log.WithField("server_id", server.ID).Info("Server destroyed successfully")
+		fmt.Printf("Server %s destroyed successfully.\n", server.Name)
 	}
 
-	log.Info("Destroying Hetzner Cloud server")
-	fmt.Println("Destroying Hetzner Cloud server...")
-
-	// Placeholder for actual server destruction logic
-	// In a real implementation, we would:
-	// 1. Detach volume
-	// 2. Call Hetzner API to destroy server
-	// 3. Verify server is destroyed
-
-	// Simulate server destruction with retry logic
-	err := errors.Retry(func() error {
-		// Simulate API call
-		time.Sleep(1 * time.Second)
-
-		// Simulate successful destruction
-		return nil
-
-		// In case of failure, we would return a retryable error:
-		// return errors.NewNetworkError("API_ERROR", "Failed to destroy server", err, true)
-	}, errors.APIRetryConfig())
-
-	if err != nil {
-		errors.LogError(err, "Failed to destroy Hetzner Cloud server")
-		return err
-	}
-
-	log.Info("Server destroyed successfully, volume preserved")
-	fmt.Println("Server destroyed successfully!")
-	fmt.Println("Volume preserved for future use.")
+	log.Info("Server destruction process completed, volumes preserved")
+	fmt.Println("All servers destroyed successfully!")
+	fmt.Println("Volumes preserved for future use.")
 
 	return nil
 }
@@ -214,8 +261,6 @@ func checkServerStatus(ctx context.Context, configPath string) error {
 	log := logger.GlobalWithField("operation", "server_status")
 	log.Info("Checking server status")
 
-	// Use context in the future for cancellation and timeouts
-
 	// Load configuration
 	manager := clientconfig.NewManager()
 	if err := manager.Load(configPath); err != nil {
@@ -223,52 +268,98 @@ func checkServerStatus(ctx context.Context, configPath string) error {
 		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Failed to load configuration", err)
 	}
 
-	fmt.Println("Checking server status...")
+	cfg := manager.GetConfig()
 
-	// Placeholder for actual status check logic
-	// In a real implementation, we would:
-	// 1. Call Hetzner API to get server status
-	// 2. Check Docker daemon status via SSH
-	// 3. Check volume attachment status
-
-	// Simulate status check with retry logic
-	var serverStatus, serverIP, uptime, dockerStatus, volumeStatus string
-
-	err := errors.RetryWithContext(ctx, func(ctx context.Context) error {
-		// Simulate API call
-		time.Sleep(500 * time.Millisecond)
-
-		// Simulate successful status check
-		serverStatus = "Running"
-		serverIP = "203.0.113.10"
-		uptime = "2 hours 15 minutes"
-		dockerStatus = "Running"
-		volumeStatus = "Attached"
-
-		return nil
-
-		// In case of failure, we would return a retryable error:
-		// return errors.NewNetworkError("API_ERROR", "Failed to check server status", err, true)
-	}, errors.NetworkRetryConfig())
-
-	if err != nil {
-		errors.LogError(err, "Failed to check server status")
-		return err
+	// Validate Hetzner API token
+	if cfg.Hetzner.APIToken == "" {
+		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Hetzner API token is required", nil)
 	}
 
-	log.WithFields(map[string]any{
-		"server_status": serverStatus,
-		"server_ip":     serverIP,
-		"uptime":        uptime,
-		"docker_status": dockerStatus,
-		"volume_status": volumeStatus,
-	}).Info("Server status retrieved successfully")
+	fmt.Println("Checking server status...")
 
-	fmt.Println("Server Status:", serverStatus)
-	fmt.Println("Server IP:", serverIP)
-	fmt.Println("Uptime:", uptime)
-	fmt.Println("Docker Status:", dockerStatus)
-	fmt.Println("Volume Status:", volumeStatus)
+	// Create Hetzner client
+	hetznerConfig := &hetzner.Config{
+		APIToken:   cfg.Hetzner.APIToken,
+		ServerType: cfg.Hetzner.ServerType,
+		Location:   cfg.Hetzner.Location,
+		VolumeSize: cfg.Hetzner.VolumeSize,
+	}
+
+	client, err := hetzner.NewClient(hetznerConfig)
+	if err != nil {
+		errors.LogError(err, "Failed to create Hetzner client")
+		return errors.NewConfigError(errors.ErrCodeInvalidConfig, "Failed to create Hetzner client", err)
+	}
+
+	// List all servers to find DockBridge servers
+	servers, err := client.ListServers(ctx)
+	if err != nil {
+		errors.LogError(err, "Failed to list servers")
+		return errors.NewNetworkError("API_ERROR", "Failed to list servers", err, true)
+	}
+
+	// Filter for DockBridge servers
+	var dockbridgeServers []*hetzner.Server
+	for _, server := range servers {
+		if len(server.Name) >= 10 && server.Name[:10] == "dockbridge" { // Check if server name starts with "dockbridge"
+			dockbridgeServers = append(dockbridgeServers, server)
+		}
+	}
+
+	if len(dockbridgeServers) == 0 {
+		fmt.Println("No DockBridge servers found.")
+		fmt.Println("Servers are automatically created when Docker commands are executed.")
+		return nil
+	}
+
+	// Display status for each DockBridge server
+	for i, server := range dockbridgeServers {
+		if i > 0 {
+			fmt.Println() // Add spacing between servers
+		}
+
+		fmt.Printf("Server: %s\n", server.Name)
+		fmt.Printf("  ID: %d\n", server.ID)
+		fmt.Printf("  Status: %s\n", server.Status)
+		fmt.Printf("  IP Address: %s\n", server.IPAddress)
+		fmt.Printf("  Created: %s\n", server.CreatedAt.Format("2006-01-02 15:04:05"))
+
+		if server.VolumeID != "" {
+			// Get volume information
+			volume, err := client.GetVolume(ctx, server.VolumeID)
+			if err != nil {
+				fmt.Printf("  Volume: %s (failed to get details)\n", server.VolumeID)
+			} else {
+				fmt.Printf("  Volume: %s (%d GB, %s)\n", volume.Name, volume.Size, volume.Status)
+			}
+		}
+
+		log.WithFields(map[string]any{
+			"server_id":     server.ID,
+			"server_status": server.Status,
+			"server_ip":     server.IPAddress,
+		}).Info("Server status retrieved")
+	}
+
+	// List volumes
+	volumes, err := client.ListVolumes(ctx)
+	if err != nil {
+		log.WithFields(map[string]any{"error": err.Error()}).Warn("Failed to list volumes")
+	} else {
+		var dockbridgeVolumes []*hetzner.Volume
+		for _, volume := range volumes {
+			if len(volume.Name) >= 10 && volume.Name[:10] == "dockbridge" {
+				dockbridgeVolumes = append(dockbridgeVolumes, volume)
+			}
+		}
+
+		if len(dockbridgeVolumes) > 0 {
+			fmt.Println("\nDockBridge Volumes:")
+			for _, volume := range dockbridgeVolumes {
+				fmt.Printf("  %s: %d GB (%s)\n", volume.Name, volume.Size, volume.Status)
+			}
+		}
+	}
 
 	return nil
 }

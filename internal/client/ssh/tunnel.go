@@ -16,6 +16,15 @@ type sshDialer interface {
 	Dial(network, addr string) (net.Conn, error)
 }
 
+// TunnelInterface defines the interface for SSH tunnels
+type TunnelInterface interface {
+	Start(ctx context.Context) error
+	Close() error
+	LocalAddr() string
+	RemoteAddr() string
+	IsActive() bool
+}
+
 // Tunnel represents an SSH tunnel from a local address to a remote address
 type Tunnel struct {
 	sshClient  *ssh.Client
@@ -177,15 +186,18 @@ func (t *Tunnel) RemoteAddr() string {
 	return t.remoteAddr
 }
 
-// NewTunnelWithClient creates a new tunnel with a custom SSH client for testing
+// NewTunnelWithDialer creates a new tunnel with a custom dialer for testing
 // This is primarily used for testing purposes
-func NewTunnelWithClient(client sshDialer, localAddr, remoteAddr string) *Tunnel {
+func NewTunnelWithDialer(dialer sshDialer, localAddr, remoteAddr string) *Tunnel {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Tunnel{
 		localAddr:  localAddr,
 		remoteAddr: remoteAddr,
 		ctx:        ctx,
 		cancel:     cancel,
-		dialer:     client,
+		dialer:     dialer,
 	}
 }
+
+// Ensure Tunnel implements TunnelInterface
+var _ TunnelInterface = (*Tunnel)(nil)

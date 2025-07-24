@@ -11,6 +11,16 @@ import (
 	"github.com/fatih/color"
 )
 
+// LoggerInterface defines the interface for logging operations
+type LoggerInterface interface {
+	Debug(msg string, args ...interface{})
+	Info(msg string, args ...interface{})
+	Warn(msg string, args ...interface{})
+	Error(msg string, args ...interface{})
+	Fatal(msg string, args ...interface{})
+	WithFields(fields map[string]interface{}) *Logger
+}
+
 // Level represents the logging level
 type Level int
 
@@ -289,3 +299,73 @@ func GlobalWithField(key string, value interface{}) *Logger {
 func GlobalWithFields(fields map[string]interface{}) *Logger {
 	return defaultLogger.WithFields(fields)
 }
+
+// Interface implementation methods
+
+// DebugWithFields logs a debug message with fields
+func (l *Logger) DebugWithFields(msg string, fields map[string]interface{}) {
+	if fields != nil {
+		l.WithFields(fields).Debug(msg)
+	} else {
+		l.Debug(msg)
+	}
+}
+
+// InfoWithFields logs an info message with fields
+func (l *Logger) InfoWithFields(msg string, fields map[string]interface{}) {
+	if fields != nil {
+		l.WithFields(fields).Info(msg)
+	} else {
+		l.Info(msg)
+	}
+}
+
+// WarnWithFields logs a warning message with fields
+func (l *Logger) WarnWithFields(msg string, fields map[string]interface{}) {
+	if fields != nil {
+		l.WithFields(fields).Warn(msg)
+	} else {
+		l.Warn(msg)
+	}
+}
+
+// ErrorWithFields logs an error message with fields
+func (l *Logger) ErrorWithFields(msg string, err error, fields map[string]interface{}) {
+	combinedFields := make(map[string]interface{})
+	if fields != nil {
+		for k, v := range fields {
+			combinedFields[k] = v
+		}
+	}
+	if err != nil {
+		combinedFields["error"] = err.Error()
+	}
+
+	if len(combinedFields) > 0 {
+		l.WithFields(combinedFields).Error(msg)
+	} else {
+		l.Error(msg)
+	}
+}
+
+// FatalWithFields logs a fatal message with fields
+func (l *Logger) FatalWithFields(msg string, err error, fields map[string]interface{}) {
+	combinedFields := make(map[string]interface{})
+	if fields != nil {
+		for k, v := range fields {
+			combinedFields[k] = v
+		}
+	}
+	if err != nil {
+		combinedFields["error"] = err.Error()
+	}
+
+	if len(combinedFields) > 0 {
+		l.WithFields(combinedFields).Fatal(msg)
+	} else {
+		l.Fatal(msg)
+	}
+}
+
+// Ensure Logger implements LoggerInterface
+var _ LoggerInterface = (*Logger)(nil)
