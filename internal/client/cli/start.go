@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/dockbridge/dockbridge/internal/client/config"
+	"github.com/dockbridge/dockbridge/internal/client/docker"
+	"github.com/dockbridge/dockbridge/internal/client/hetzner"
+	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -38,6 +42,11 @@ func startClient(configPath string) error {
 
 	cfg := manager.GetConfig()
 
+	// Validate required configuration
+	if cfg.Hetzner.APIToken == "" {
+		return fmt.Errorf("Hetzner API token is required. Please set it in the configuration file or via HETZNER_API_TOKEN environment variable")
+	}
+
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -51,24 +60,72 @@ func startClient(configPath string) error {
 		cancel()
 	}()
 
-	// Start Docker proxy (placeholder for actual implementation)
-	fmt.Println("Starting Docker proxy on port:", cfg.Docker.ProxyPort)
-	fmt.Println("Using Docker socket:", cfg.Docker.SocketPath)
-	fmt.Println("Using Hetzner server type:", cfg.Hetzner.ServerType)
-	fmt.Println("Using Hetzner location:", cfg.Hetzner.Location)
+	// Initialize logger
+	log := logger.NewDefault()
+	log.Info("Initializing DockBridge client")
+
+	// Create Hetzner client
+	hetznerConfig := &hetzner.Config{
+		APIToken:   cfg.Hetzner.APIToken,
+		ServerType: cfg.Hetzner.ServerType,
+		Location:   cfg.Hetzner.Location,
+		VolumeSize: cfg.Hetzner.VolumeSize,
+	}
+
+	hetznerClient, err := hetzner.NewClient(hetznerConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Hetzner client: %w", err)
+	}
+
+	// Create Docker proxy configuration
+	proxyConfig := &docker.ProxyConfig{
+		SocketPath:    cfg.Docker.SocketPath,
+		ProxyPort:     cfg.Docker.ProxyPort,
+		HetznerClient: hetznerClient,
+		SSHConfig:     &cfg.SSH,
+		HetznerConfig: &cfg.Hetzner,
+		Logger:        log,
+	}
+
+	// Create and start Docker proxy
+	proxy := docker.NewDockerProxy()
+
+	fmt.Printf("Starting Docker proxy on socket: %s\n", cfg.Docker.SocketPath)
+	fmt.Printf("Using Hetzner server type: %s in location: %s\n", cfg.Hetzner.ServerType, cfg.Hetzner.Location)
+	fmt.Println("Servers will be provisioned automatically when Docker commands are executed.")
+
+	// If using Unix socket, suggest adding user to docker group
+	if strings.HasPrefix(cfg.Docker.SocketPath, "/") {
+		fmt.Println("Note: If you encounter permission issues, ensure your user is in the 'docker' group:")
+		fmt.Println("  sudo usermod -aG docker $USER")
+		fmt.Println("  Then log out and back in for the changes to take effect.")
+	}
+
+	if err := proxy.Start(ctx, proxyConfig); err != nil {
+		return fmt.Errorf("failed to start Docker proxy: %w", err)
+	}
 
 	// Start lock detector (placeholder for actual implementation)
 	fmt.Println("Starting lock detector...")
 
 	// Start keep-alive client (placeholder for actual implementation)
-	fmt.Println("Starting keep-alive client with interval:", cfg.KeepAlive.Interval)
+	fmt.Printf("Starting keep-alive client with interval: %s\n", cfg.KeepAlive.Interval)
 
 	fmt.Println("DockBridge client started successfully!")
+	fmt.Println("Docker commands will be proxied to remote Hetzner servers (provisioned on-demand)")
 	fmt.Println("Press Ctrl+C to stop")
 
 	// Wait for context cancellation
 	<-ctx.Done()
 	fmt.Println("Shutting down DockBridge client...")
 
+	// Stop the proxy
+	if err := proxy.Stop(); err != nil {
+		log.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Error stopping Docker proxy")
+	}
+
+	fmt.Println("DockBridge client stopped")
 	return nil
 }

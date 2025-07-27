@@ -178,6 +178,12 @@ func (t *Tunnel) IsActive() bool {
 
 // LocalAddr returns the local address of the tunnel
 func (t *Tunnel) LocalAddr() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.listener != nil {
+		return t.listener.Addr().String()
+	}
 	return t.localAddr
 }
 

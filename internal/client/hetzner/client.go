@@ -275,9 +275,19 @@ func (c *Client) DetachVolume(ctx context.Context, volumeID string) error {
 	return nil
 }
 
-// ManageSSHKeys uploads and manages SSH keys
+// ManageSSHKeys uploads and manages SSH keys, reusing existing keys if they match
 func (c *Client) ManageSSHKeys(ctx context.Context, publicKey string) (*SSHKey, error) {
-	// Generate unique SSH key name
+	// First, try to find an existing SSH key with the same public key
+	existingKey, err := c.findExistingSSHKey(ctx, publicKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to search for existing SSH key")
+	}
+
+	if existingKey != nil {
+		return existingKey, nil
+	}
+
+	// No existing key found, create a new one
 	keyName := fmt.Sprintf("dockbridge-key-%d", time.Now().Unix())
 
 	// Create SSH key
@@ -292,6 +302,24 @@ func (c *Client) ManageSSHKeys(ctx context.Context, publicKey string) (*SSHKey, 
 	}
 
 	return convertSSHKey(result), nil
+}
+
+// findExistingSSHKey searches for an existing SSH key that matches the given public key
+func (c *Client) findExistingSSHKey(ctx context.Context, publicKey string) (*SSHKey, error) {
+	// List all SSH keys
+	sshKeys, err := c.hcloud.SSHKey.All(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list SSH keys")
+	}
+
+	// Look for a key with matching public key content
+	for _, key := range sshKeys {
+		if key.PublicKey == publicKey {
+			return convertSSHKey(key), nil
+		}
+	}
+
+	return nil, nil // No matching key found
 }
 
 // GetServer retrieves server information by ID

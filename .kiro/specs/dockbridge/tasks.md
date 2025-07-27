@@ -48,7 +48,7 @@
   - Write unit tests with mocked Hetzner API responses
   - _Requirements: 1.3, 4.1, 4.2, 4.3, 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 7. Implement Docker socket proxy
+- [x] 7. Implement Docker socket proxy
   - Create HTTP proxy server that intercepts Docker API calls in internal/client/docker/
   - Implement request forwarding via SSH tunnels to remote Hetzner servers
   - Add connection pooling and keep-alive support for performance optimization

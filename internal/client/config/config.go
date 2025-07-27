@@ -203,8 +203,8 @@ func (m *Manager) validateHetzner() error {
 func (m *Manager) validateDocker() error {
 	docker := &m.config.Docker
 
-	// Validate socket path exists (if not default)
-	if docker.SocketPath != "/var/run/docker.sock" {
+	// Validate socket path exists (if not default, tcp mode, or port format)
+	if docker.SocketPath != "/var/run/docker.sock" && docker.SocketPath != "tcp" && !strings.HasPrefix(docker.SocketPath, ":") {
 		if _, err := os.Stat(docker.SocketPath); err != nil {
 			return fmt.Errorf("docker socket path '%s' does not exist or is not accessible", docker.SocketPath)
 		}
