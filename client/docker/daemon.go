@@ -216,14 +216,18 @@ func (d *DockBridgeDaemon) handleConnection(localConn net.Conn) {
 	d.logger.WithFields(map[string]interface{}{
 		"conn_id": connID,
 		"remote":  localConn.RemoteAddr(),
-	}).Info("🐳 New Docker connection established")
+	}).Info("🐳 New Docker connection - establishing remote server connection...")
 
 	// Ensure we have a connection to remote server
 	if err := d.clientManager.EnsureConnection(d.ctx); err != nil {
 		d.logger.WithFields(map[string]interface{}{
 			"conn_id": connID,
 			"error":   err.Error(),
-		}).Error("Failed to ensure connection to remote server")
+		}).Error("❌ Failed to ensure connection to remote server")
+
+		// Send a helpful error message to the client
+		errorMsg := fmt.Sprintf("Failed to connect to remote Docker server: %v\n", err)
+		localConn.Write([]byte(errorMsg))
 		return
 	}
 
@@ -244,7 +248,11 @@ func (d *DockBridgeDaemon) handleConnection(localConn net.Conn) {
 			"conn_id":     connID,
 			"tunnel_addr": tunnel.LocalAddr(),
 			"error":       err.Error(),
-		}).Error("Failed to connect to remote Docker daemon via SSH tunnel")
+		}).Error("❌ Failed to connect to remote Docker daemon via SSH tunnel")
+
+		// Send a helpful error message to the client
+		errorMsg := fmt.Sprintf("Failed to connect to Docker daemon: %v\n", err)
+		localConn.Write([]byte(errorMsg))
 		return
 	}
 	defer func() {

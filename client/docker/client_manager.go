@@ -69,7 +69,222 @@ func (dcm *dockerClientManagerImpl) GetClient(ctx context.Context) (*client.Clie
 		return dcm.dockerClient, nil
 	}
 
-	// Create Docker client pointing to SSH tunnel
+	// Create Docker client using the helper method
+	dockerClient, err := dcm.createDockerClient()
+	if err != nil {
+		return nil, err
+	}
+
+	dcm.dockerClient = dockerClient
+	dcm.logger.WithFields(map[string]interface{}{
+		"tunnel_addr": dcm.tunnel.LocalAddr(),
+		"server_ip":   dcm.currentServer.IPAddress,
+	}).Debug("Docker client created successfully")
+
+	return dcm.dockerClient, nil
+}
+
+// EnsureConnection ensures we have an active connection to a remote server with Docker ready
+func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error {
+	// Check if we already have an active connection
+	if dcm.isConnectionHealthy() {
+		dcm.logger.Debug("Using existing healthy connection")
+		return nil
+	}
+
+	dcm.logger.Info("🚀 Establishing connection to remote Docker server...")
+
+	// Clean up any existing connection
+	dcm.cleanup()
+
+	// Get or provision a server with progress feedback
+	server, err := dcm.getOrProvisionServerWithProgress(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get or provision server")
+	}
+
+	dcm.currentServer = server
+
+	// Establish SSH connection with enhanced retry logic
+	if err := dcm.establishSSHConnection(ctx, server); err != nil {
+		// If SSH connection fails, the server might be deleted or corrupted
+		// Try to recreate it once
+		dcm.logger.WithFields(map[string]interface{}{
+			"server_id": server.ID,
+			"error":     err.Error(),
+		}).Warn("SSH connection failed, attempting server recreation")
+
+		// Clean up the failed server
+		go dcm.cleanupStaleServers(context.Background(), []*hetzner.Server{server})
+
+		// Try to provision a new server
+		server, err = dcm.provisionNewServerWithProgress(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to provision new server after SSH failure")
+		}
+
+		dcm.currentServer = server
+
+		// Try SSH connection again with the new server
+		if err := dcm.establishSSHConnection(ctx, server); err != nil {
+			return errors.Wrap(err, "failed to establish SSH connection even after server recreation")
+		}
+	}
+
+	// Create SSH tunnel for Docker API
+	if err := dcm.createDockerTunnel(ctx); err != nil {
+		dcm.cleanup()
+		return errors.Wrap(err, "failed to create Docker tunnel")
+	}
+
+	// Verify Docker daemon is ready and responsive
+	if err := dcm.verifyDockerDaemonReady(ctx); err != nil {
+		dcm.cleanup()
+		return errors.Wrap(err, "Docker daemon is not ready")
+	}
+
+	dcm.logger.WithFields(map[string]interface{}{
+		"server_ip":   dcm.currentServer.IPAddress,
+		"tunnel_addr": dcm.tunnel.LocalAddr(),
+	}).Info("✅ Remote Docker connection established and verified")
+
+	return nil
+}
+
+// GetTunnel returns the current SSH tunnel
+func (dcm *dockerClientManagerImpl) GetTunnel() ssh.TunnelInterface {
+	return dcm.tunnel
+}
+
+// Close closes all connections and cleans up resources
+func (dcm *dockerClientManagerImpl) Close() error {
+	dcm.logger.Info("Closing Docker client manager")
+	dcm.cleanup()
+	dcm.logger.Info("Docker client manager closed")
+	return nil
+}
+
+// establishSSHConnection creates and tests SSH connection to the server
+func (dcm *dockerClientManagerImpl) establishSSHConnection(ctx context.Context, server *hetzner.Server) error {
+	dcm.logger.WithFields(map[string]interface{}{
+		"server_ip": server.IPAddress,
+	}).Info("🔗 Establishing SSH connection...")
+
+	// Create SSH client
+	sshKeyPath := expandPath(dcm.sshConfig.KeyPath)
+	sshConfig := &ssh.ClientConfig{
+		Host:           server.IPAddress,
+		Port:           dcm.sshConfig.Port,
+		User:           "root",
+		PrivateKeyPath: sshKeyPath,
+		Timeout:        60 * time.Second,
+	}
+
+	dcm.sshClient = ssh.NewClient(sshConfig)
+
+	// Connect to SSH server with enhanced retry logic
+	var connectErr error
+	maxRetries := 5 // Increased retries for better reliability
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		connectCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		connectErr = dcm.sshClient.Connect(connectCtx)
+		cancel()
+
+		if connectErr == nil {
+			dcm.logger.WithFields(map[string]interface{}{
+				"server_ip": server.IPAddress,
+				"attempt":   attempt,
+			}).Info("✅ SSH connection established")
+			return nil
+		}
+
+		dcm.logger.WithFields(map[string]interface{}{
+			"attempt":   attempt,
+			"max_tries": maxRetries,
+			"error":     connectErr.Error(),
+			"server_ip": server.IPAddress,
+		}).Warn("⚠️ SSH connection attempt failed, retrying...")
+
+		if attempt < maxRetries {
+			// Progressive backoff: 2s, 4s, 6s, 8s
+			sleepDuration := time.Duration(attempt*2) * time.Second
+			time.Sleep(sleepDuration)
+		}
+	}
+
+	return errors.Wrapf(connectErr, "failed to connect to SSH server %s after %d retries", server.IPAddress, maxRetries)
+}
+
+// createDockerTunnel creates SSH tunnel for Docker API access
+func (dcm *dockerClientManagerImpl) createDockerTunnel(ctx context.Context) error {
+	dcm.logger.Info("🚇 Creating SSH tunnel for Docker API...")
+
+	localAddr := "127.0.0.1:0" // Use random available port
+	remoteAddr := "127.0.0.1:2376"
+
+	tunnelCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	tunnel, err := dcm.sshClient.CreateTunnel(tunnelCtx, localAddr, remoteAddr)
+	if err != nil {
+		return errors.Wrap(err, "failed to create SSH tunnel")
+	}
+
+	dcm.tunnel = tunnel
+
+	dcm.logger.WithFields(map[string]interface{}{
+		"local_addr":  dcm.tunnel.LocalAddr(),
+		"remote_addr": remoteAddr,
+		"server_ip":   dcm.currentServer.IPAddress,
+	}).Info("✅ SSH tunnel created successfully")
+
+	return nil
+}
+
+// verifyDockerDaemonReady verifies that Docker daemon is ready and responsive
+func (dcm *dockerClientManagerImpl) verifyDockerDaemonReady(ctx context.Context) error {
+	dcm.logger.Info("🐳 Verifying Docker daemon is ready...")
+
+	// Create Docker client if not exists
+	if dcm.dockerClient == nil {
+		dockerClient, err := dcm.createDockerClient()
+		if err != nil {
+			return errors.Wrap(err, "failed to create Docker client")
+		}
+		dcm.dockerClient = dockerClient
+	}
+
+	// Try to ping Docker daemon with retries
+	maxRetries := 10
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_, err := dcm.dockerClient.Ping(pingCtx)
+		cancel()
+
+		if err == nil {
+			dcm.logger.WithFields(map[string]interface{}{
+				"attempt": attempt,
+			}).Info("✅ Docker daemon is ready and responsive")
+			return nil
+		}
+
+		dcm.logger.WithFields(map[string]interface{}{
+			"attempt":   attempt,
+			"max_tries": maxRetries,
+			"error":     err.Error(),
+		}).Debug("Docker daemon not ready yet, retrying...")
+
+		if attempt < maxRetries {
+			// Wait 3 seconds between attempts
+			time.Sleep(3 * time.Second)
+		}
+	}
+
+	return errors.New("Docker daemon failed to become ready after maximum retries")
+}
+
+// createDockerClient creates a new Docker client connected via SSH tunnel
+func (dcm *dockerClientManagerImpl) createDockerClient() (*client.Client, error) {
 	if dcm.tunnel == nil {
 		return nil, errors.New("no SSH tunnel available")
 	}
@@ -99,113 +314,7 @@ func (dcm *dockerClientManagerImpl) GetClient(ctx context.Context) (*client.Clie
 		return nil, errors.Wrap(err, "failed to create Docker client")
 	}
 
-	dcm.dockerClient = dockerClient
-	dcm.logger.WithFields(map[string]interface{}{
-		"tunnel_addr": dcm.tunnel.LocalAddr(),
-		"server_ip":   dcm.currentServer.IPAddress,
-	}).Info("Docker client created successfully")
-
-	return dcm.dockerClient, nil
-}
-
-// EnsureConnection ensures we have an active connection to a remote server
-func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error {
-	// Check if we already have an active connection
-	if dcm.isConnectionHealthy() {
-		dcm.logger.Debug("Using existing connection")
-		return nil
-	}
-
-	dcm.logger.Info("Establishing connection to remote server")
-
-	// Clean up any existing connection
-	dcm.cleanup()
-
-	// Get or provision a server
-	server, err := dcm.getOrProvisionServer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get or provision server")
-	}
-
-	dcm.currentServer = server
-
-	// Create SSH client
-	sshKeyPath := expandPath(dcm.sshConfig.KeyPath)
-	sshConfig := &ssh.ClientConfig{
-		Host:           server.IPAddress,
-		Port:           dcm.sshConfig.Port,
-		User:           "root",
-		PrivateKeyPath: sshKeyPath,
-		Timeout:        60 * time.Second,
-	}
-
-	dcm.sshClient = ssh.NewClient(sshConfig)
-
-	// Connect to SSH server with retry logic
-	var connectErr error
-	maxRetries := 3
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		connectCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-		connectErr = dcm.sshClient.Connect(connectCtx)
-		cancel()
-
-		if connectErr == nil {
-			break
-		}
-
-		dcm.logger.WithFields(map[string]interface{}{
-			"attempt":   attempt,
-			"max_tries": maxRetries,
-			"error":     connectErr.Error(),
-			"server_ip": server.IPAddress,
-		}).Warn("SSH connection attempt failed, retrying")
-
-		if attempt < maxRetries {
-			time.Sleep(time.Duration(attempt*2) * time.Second)
-		}
-	}
-
-	if connectErr != nil {
-		return errors.Wrap(connectErr, "failed to connect to SSH server after retries")
-	}
-
-	dcm.logger.WithFields(map[string]interface{}{
-		"server_ip": server.IPAddress,
-	}).Info("SSH connection established successfully")
-
-	// Create SSH tunnel for Docker API
-	localAddr := "127.0.0.1:0" // Use random available port
-	remoteAddr := "127.0.0.1:2376"
-
-	tunnelCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-
-	dcm.tunnel, err = dcm.sshClient.CreateTunnel(tunnelCtx, localAddr, remoteAddr)
-	if err != nil {
-		dcm.cleanup()
-		return errors.Wrap(err, "failed to create SSH tunnel")
-	}
-
-	dcm.logger.WithFields(map[string]interface{}{
-		"local_addr":  dcm.tunnel.LocalAddr(),
-		"remote_addr": remoteAddr,
-		"server_ip":   server.IPAddress,
-	}).Info("SSH tunnel established")
-
-	return nil
-}
-
-// GetTunnel returns the current SSH tunnel
-func (dcm *dockerClientManagerImpl) GetTunnel() ssh.TunnelInterface {
-	return dcm.tunnel
-}
-
-// Close closes all connections and cleans up resources
-func (dcm *dockerClientManagerImpl) Close() error {
-	dcm.logger.Info("Closing Docker client manager")
-	dcm.cleanup()
-	dcm.logger.Info("Docker client manager closed")
-	return nil
+	return dockerClient, nil
 }
 
 // isConnectionHealthy checks if the current connection is healthy
@@ -249,6 +358,12 @@ func (dcm *dockerClientManagerImpl) cleanup() {
 	}
 
 	dcm.currentServer = nil
+}
+
+// getOrProvisionServerWithProgress gets an existing server or provisions a new one with progress feedback
+func (dcm *dockerClientManagerImpl) getOrProvisionServerWithProgress(ctx context.Context) (*hetzner.Server, error) {
+	dcm.logger.Info("🔍 Searching for existing DockBridge servers...")
+	return dcm.getOrProvisionServer(ctx)
 }
 
 // getOrProvisionServer gets an existing server or provisions a new one
@@ -308,6 +423,12 @@ func (dcm *dockerClientManagerImpl) getOrProvisionServer(ctx context.Context) (*
 
 	// No running server found, provision a new one
 	dcm.logger.Info("No running server found, provisioning new server")
+	return dcm.provisionNewServerWithProgress(ctx)
+}
+
+// provisionNewServerWithProgress creates a new Hetzner server with Docker CE and progress feedback
+func (dcm *dockerClientManagerImpl) provisionNewServerWithProgress(ctx context.Context) (*hetzner.Server, error) {
+	dcm.logger.Info("🏗️ Provisioning new DockBridge server (this may take 2-3 minutes)...")
 	return dcm.provisionNewServer(ctx)
 }
 
@@ -480,9 +601,9 @@ func (dcm *dockerClientManagerImpl) generateSSHKey(keyPath string) error {
 func (dcm *dockerClientManagerImpl) waitForServerReady(ctx context.Context, server *hetzner.Server) error {
 	dcm.logger.WithFields(map[string]interface{}{
 		"server_id": server.ID,
-	}).Info("Waiting for server to be ready")
+	}).Info("⏳ Waiting for server setup to complete...")
 
-	timeout := time.After(8 * time.Minute)
+	timeout := time.After(10 * time.Minute) // Increased timeout for reliability
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
@@ -499,23 +620,26 @@ func (dcm *dockerClientManagerImpl) waitForServerReady(ctx context.Context, serv
 				"server_id": server.ID,
 				"attempts":  attempt,
 				"elapsed":   elapsed.String(),
-			}).Error("Timeout waiting for server to be ready")
-			return errors.New("timeout waiting for server to be ready after 8 minutes")
+			}).Error("❌ Timeout waiting for server to be ready")
+			return errors.New("timeout waiting for server to be ready after 10 minutes")
 		case <-ticker.C:
 			attempt++
 			elapsed := time.Since(startTime)
-			dcm.logger.WithFields(map[string]interface{}{
-				"server_id": server.ID,
-				"attempt":   attempt,
-				"elapsed":   elapsed.String(),
-			}).Info("Checking server readiness")
+
+			// Show progress every 30 seconds
+			if attempt%2 == 0 {
+				dcm.logger.WithFields(map[string]interface{}{
+					"server_id": server.ID,
+					"elapsed":   elapsed.Truncate(time.Second).String(),
+				}).Info("⏳ Still waiting for server setup (installing Docker, configuring services)...")
+			}
 
 			if dcm.checkServerReady(ctx, server) {
 				dcm.logger.WithFields(map[string]interface{}{
 					"server_id": server.ID,
 					"attempts":  attempt,
-					"elapsed":   elapsed.String(),
-				}).Info("Server is ready")
+					"elapsed":   elapsed.Truncate(time.Second).String(),
+				}).Info("✅ Server is ready and Docker daemon is running")
 				return nil
 			}
 		}
@@ -545,17 +669,18 @@ func (dcm *dockerClientManagerImpl) checkServerReady(ctx context.Context, server
 			"server_id": server.ID,
 			"server_ip": server.IPAddress,
 			"error":     err.Error(),
-		}).Debug("Server not ready - SSH connection failed")
+		}).Debug("🔍 Server not ready - SSH connection failed")
 		return false
 	}
 
-	// Check if Docker is running
-	output, err := tempSSHClient.ExecuteCommand(checkCtx, "docker version --format '{{.Server.Version}}'")
+	// Check if Docker is running and accessible on port 2376
+	dockerCheckCmd := "docker version --format '{{.Server.Version}}' && curl -s http://localhost:2376/version >/dev/null"
+	output, err := tempSSHClient.ExecuteCommand(checkCtx, dockerCheckCmd)
 	if err != nil {
 		dcm.logger.WithFields(map[string]interface{}{
 			"server_id": server.ID,
 			"error":     err.Error(),
-		}).Debug("Server not ready - Docker daemon not responding")
+		}).Debug("🔍 Server not ready - Docker daemon not fully configured")
 		return false
 	}
 
@@ -563,7 +688,7 @@ func (dcm *dockerClientManagerImpl) checkServerReady(ctx context.Context, server
 	dcm.logger.WithFields(map[string]interface{}{
 		"server_id":      server.ID,
 		"docker_version": dockerVersion,
-	}).Info("Server ready - Docker daemon is responding")
+	}).Debug("✅ Server ready - Docker daemon is responding on both CLI and API")
 
 	return true
 }
