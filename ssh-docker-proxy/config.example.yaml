@@ -1,0 +1,20 @@
+# SSH Docker Proxy Configuration Example
+# Copy this file to one of the following locations:
+# - ssh-docker-proxy.yaml (current directory)
+# - ~/.ssh-docker-proxy.yaml (home directory)
+# - ~/.config/ssh-docker-proxy/config.yaml (XDG config directory)
+
+# Local Unix socket path where the proxy will listen
+# Docker clients should connect to this socket
+local_socket: /tmp/docker.sock
+
+# SSH connection parameters
+ssh_user: myuser
+ssh_host: remote-server.example.com  # Port 22 is default, or specify like "host:2222"
+ssh_key_path: ~/.ssh/id_rsa  # ~ expansion supported
+
+# Remote Docker socket path (optional, defaults to /var/run/docker.sock)
+remote_socket: /var/run/docker.sock
+
+# SSH connection timeout (optional, defaults to 10s)
+timeout: 10s
