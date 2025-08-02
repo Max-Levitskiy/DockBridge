@@ -77,20 +77,19 @@ func startClient(configPath string) error {
 		return fmt.Errorf("failed to create Hetzner client: %w", err)
 	}
 
-	// Create Docker proxy configuration
-	proxyConfig := &docker.ProxyConfig{
+	// Create DockBridge daemon configuration
+	daemonConfig := &docker.DaemonConfig{
 		SocketPath:    cfg.Docker.SocketPath,
-		ProxyPort:     cfg.Docker.ProxyPort,
 		HetznerClient: hetznerClient,
 		SSHConfig:     &cfg.SSH,
 		HetznerConfig: &cfg.Hetzner,
 		Logger:        log,
 	}
 
-	// Create and start Docker proxy
-	proxy := docker.NewDockerProxy()
+	// Create and start DockBridge daemon
+	daemon := docker.NewDockBridgeDaemon()
 
-	fmt.Printf("Starting Docker proxy on socket: %s\n", cfg.Docker.SocketPath)
+	fmt.Printf("Starting DockBridge daemon on socket: %s\n", cfg.Docker.SocketPath)
 	fmt.Printf("Using Hetzner server type: %s in location: %s\n", cfg.Hetzner.ServerType, cfg.Hetzner.Location)
 	fmt.Println("Servers will be provisioned automatically when Docker commands are executed.")
 
@@ -101,8 +100,8 @@ func startClient(configPath string) error {
 		fmt.Println("  Then log out and back in for the changes to take effect.")
 	}
 
-	if err := proxy.Start(ctx, proxyConfig); err != nil {
-		return fmt.Errorf("failed to start Docker proxy: %w", err)
+	if err := daemon.Start(ctx, daemonConfig); err != nil {
+		return fmt.Errorf("failed to start DockBridge daemon: %w", err)
 	}
 
 	// Start lock detector (placeholder for actual implementation)
@@ -111,21 +110,21 @@ func startClient(configPath string) error {
 	// Start keep-alive client (placeholder for actual implementation)
 	fmt.Printf("Starting keep-alive client with interval: %s\n", cfg.KeepAlive.Interval)
 
-	fmt.Println("DockBridge client started successfully!")
-	fmt.Println("Docker commands will be proxied to remote Hetzner servers (provisioned on-demand)")
+	fmt.Println("DockBridge daemon started successfully!")
+	fmt.Println("Docker commands will be executed on remote Hetzner servers (provisioned on-demand)")
 	fmt.Println("Press Ctrl+C to stop")
 
 	// Wait for context cancellation
 	<-ctx.Done()
-	fmt.Println("Shutting down DockBridge client...")
+	fmt.Println("Shutting down DockBridge daemon...")
 
-	// Stop the proxy
-	if err := proxy.Stop(); err != nil {
+	// Stop the daemon
+	if err := daemon.Stop(); err != nil {
 		log.WithFields(map[string]interface{}{
 			"error": err.Error(),
-		}).Error("Error stopping Docker proxy")
+		}).Error("Error stopping DockBridge daemon")
 	}
 
-	fmt.Println("DockBridge client stopped")
+	fmt.Println("DockBridge daemon stopped")
 	return nil
 }
