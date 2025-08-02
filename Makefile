@@ -1,15 +1,15 @@
-.PHONY: build test clean client server
+.PHONY: build test clean dockbridge
 
-# Build both client and server binaries
-build: client server
+# Build the main dockbridge binary
+build: dockbridge
 
-# Build client binary
-client:
-	go build -o bin/dockbridge-client ./cmd/client
+# Build dockbridge binary
+dockbridge:
+	go build -o bin/dockbridge ./cmd/dockbridge
 
-# Build server binary  
-server:
-	go build -o bin/dockbridge-server ./cmd/server
+# Legacy targets for backward compatibility
+client: dockbridge
+server: dockbridge
 
 # Run tests
 test:
