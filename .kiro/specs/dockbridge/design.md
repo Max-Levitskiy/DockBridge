@@ -2,30 +2,28 @@
 
 ## Overview
 
-DockBridge is a sophisticated client-server system built in Go that enables seamless Docker development workflows by transparently proxying Docker commands from a local laptop to remote Hetzner Cloud servers. The system intelligently manages server lifecycle based on user activity, implements robust keep-alive mechanisms, and provides persistent storage across server recreations.
+DockBridge is a simplified client system built in Go that enables seamless Docker development workflows by directly connecting to remote Hetzner Cloud servers using the Docker Go client library. The system has been refactored from a complex HTTP proxy approach to eliminate overcomplicated connection management and fix streaming issues with commands like `docker run`.
 
-The architecture follows a monorepo structure with two main components:
-- **Client**: Runs locally, handles Docker socket proxying, screen lock detection, and keep-alive messaging
-- **Server**: Runs on Hetzner Cloud instances, processes Docker commands and manages self-destruction
+The simplified architecture has one main component:
+- **Client**: Runs locally, uses Docker Go client over SSH tunnel to communicate directly with remote Docker daemon, manages server lifecycle and keep-alive messaging
 
 ## Architecture
 
-### High-Level System Architecture
+### Simplified System Architecture
 
 ```mermaid
 graph TB
     subgraph "Local Laptop"
-        DC[Docker Client] --> DP[Docker Proxy]
-        DP --> SSH[SSH Tunnel]
+        DC[Docker Client] --> DGC[Docker Go Client]
+        DGC --> SSH[SSH Tunnel]
         CLI[CLI Interface] --> CM[Configuration Manager]
         LD[Lock Detector] --> KAC[Keep-Alive Client]
         KAC --> SSH
     end
     
     subgraph "Hetzner Cloud"
-        SSH --> KAM[Keep-Alive Monitor]
-        SSH --> DH[Docker Handler]
-        DH --> DD[Docker Daemon]
+        SSH --> DD[Docker Daemon]
+        KAC --> KAM[Keep-Alive Monitor]
         KAM --> LM[Lifecycle Manager]
         LM --> HA[Hetzner API]
         PV[Persistent Volume] --> DD
@@ -38,52 +36,76 @@ graph TB
     end
 ```
 
-### Component Interaction Flow
+### Simplified Component Interaction Flow
 
 ```mermaid
 sequenceDiagram
     participant U as User
     participant DC as Docker Client
-    participant DP as Docker Proxy
+    participant DGC as Docker Go Client
     participant HC as Hetzner Client
-    participant S as Remote Server
     participant DD as Docker Daemon
     
     U->>DC: docker run hello-world
-    DC->>DP: HTTP API Call
-    DP->>HC: Check server status
+    DC->>DGC: Direct Docker API Call
+    DGC->>HC: Check server status
     alt No server exists
         HC->>HC: Provision new server
-        HC->>S: Deploy & configure
     end
-    DP->>S: Forward Docker API call
-    S->>DD: Execute Docker command
-    DD->>S: Return result
-    S->>DP: Forward response
-    DP->>DC: HTTP response
-    DC->>U: Display output
+    DGC->>DD: Direct Docker API call via SSH tunnel
+    DD->>DGC: Stream response directly
+    DGC->>DC: Stream response
+    DC->>U: Display real-time output
 ```
 
 ## Components and Interfaces
 
 ### Client Components
 
-#### 1. Docker Proxy (`internal/client/docker/`)
+#### 1. Docker Client Manager (`internal/client/docker/`)
 **Interface:**
 ```go
-type DockerProxy interface {
-    Start(ctx context.Context, config *Config) error
-    Stop() error
-    ForwardRequest(req *http.Request) (*http.Response, error)
+type DockerClientManager interface {
+    GetClient(ctx context.Context) (*client.Client, error)
+    EnsureConnection(ctx context.Context) error
+    Close() error
 }
 ```
 
 **Responsibilities:**
-- Intercepts Docker API calls on local socket
-- Establishes SSH tunnels to remote servers
-- Forwards HTTP requests with proper authentication
-- Maintains connection pooling for performance
-- Handles request/response streaming for large operations
+- Creates Docker Go client instances connected to remote servers via SSH tunnel
+- Manages simple SSH tunnel connections without complex pooling
+- Handles Docker client lifecycle and connection management
+- Provides direct access to Docker API without HTTP proxy layer
+
+**Key Implementation Details:**
+```go
+// Simplified Docker client creation over SSH tunnel
+func (dcm *DockerClientManager) GetClient(ctx context.Context) (*client.Client, error) {
+    // Ensure SSH tunnel is established
+    if err := dcm.ensureSSHTunnel(ctx); err != nil {
+        return nil, err
+    }
+    
+    // Create Docker client pointing to SSH tunnel
+    dockerClient, err := client.NewClientWithOpts(
+        client.WithHost(fmt.Sprintf("tcp://%s", dcm.tunnel.LocalAddr())),
+        client.WithAPIVersionNegotiation(),
+    )
+    if err != nil {
+        return nil, err
+    }
+    
+    return dockerClient, nil
+}
+```
+
+**Benefits of This Approach:**
+- **Native Streaming**: Docker client handles streaming responses natively, fixing `docker run` freezing
+- **Simplified Code**: Eliminates 3 complex files (proxy.go, connection_manager.go, request_handler.go)
+- **Better Error Handling**: Docker client provides proper error context and retry mechanisms
+- **Reduced Latency**: Direct API calls without HTTP proxy overhead
+- **Easier Debugging**: Clear code path from CLI command to Docker daemon
 
 #### 2. Hetzner Client (`internal/client/hetzner/`)
 **Interface:**
@@ -139,57 +161,32 @@ type KeepAliveClient interface {
 - Handles connection recovery and retry logic
 - Coordinates with lock detector for graceful shutdowns
 
-### Server Components
+### Simplified Server Components
 
-#### 1. Docker Handler (`internal/server/docker/`)
+The server-side complexity has been eliminated. The remote Hetzner servers now only need:
+
+#### 1. Docker Daemon
+- Standard Docker daemon running on the remote server
+- Accessible via SSH tunnel on port 2376 or Unix socket
+- No custom server-side code required
+
+#### 2. Keep-Alive Monitor (Simple Script)
 **Interface:**
-```go
-type DockerHandler interface {
-    HandleRequest(w http.ResponseWriter, r *http.Request)
-    Start(ctx context.Context) error
-    Stop() error
-}
+```bash
+#!/bin/bash
+# Simple keep-alive monitor script deployed to server
 ```
 
 **Responsibilities:**
-- Receives proxied Docker API calls via HTTP
-- Maintains full Docker API compatibility
-- Forwards requests to local Docker daemon
-- Streams responses back to client
-- Handles concurrent operations efficiently
+- Simple bash script that monitors for client heartbeats
+- Shuts down server if no heartbeat received within timeout
+- Minimal implementation without complex state management
 
-#### 2. Keep-Alive Monitor (`internal/server/keepalive/`)
-**Interface:**
-```go
-type KeepAliveMonitor interface {
-    Start(ctx context.Context) error
-    Stop() error
-    RecordHeartbeat(clientID string) error
-    GetTimeoutClients() []string
-}
-```
-
+#### 3. Server Lifecycle (Cloud-init)
 **Responsibilities:**
-- Tracks client heartbeat messages
-- Implements configurable timeout detection (5-minute default)
-- Triggers lifecycle manager on client timeouts
-- Maintains client connection state
-
-#### 3. Lifecycle Manager (`internal/server/lifecycle/`)
-**Interface:**
-```go
-type LifecycleManager interface {
-    Start(ctx context.Context) error
-    InitiateShutdown(reason ShutdownReason) error
-    CancelShutdown() error
-}
-```
-
-**Responsibilities:**
-- Handles graceful server shutdown sequences
-- Detaches volumes before termination
-- Self-destructs via Hetzner API calls
-- Implements shutdown cancellation for quick reconnects
+- Server provisioning and setup handled via cloud-init scripts
+- Volume attachment managed through Hetzner API from client
+- Self-destruction triggered by simple keep-alive timeout
 
 ## Data Models
 
@@ -336,12 +333,19 @@ func (suite *DockerProxyTestSuite) TestForwardDockerCommand() {
 ## Technology Stack
 
 ### Core Dependencies
-- **Docker Integration**: `github.com/docker/docker/client` for Docker API compatibility
+- **Docker Integration**: `github.com/docker/docker/client` for direct Docker API access (primary change)
 - **Hetzner Cloud**: `github.com/hetznercloud/hcloud-go/v2/hcloud` for cloud resource management
-- **SSH Communication**: `golang.org/x/crypto/ssh` with `github.com/melbahja/goph` wrapper
+- **SSH Communication**: `golang.org/x/crypto/ssh` for simple tunnel creation (no complex wrappers)
 - **CLI Framework**: `github.com/spf13/cobra` with `github.com/spf13/viper` for configuration
 - **Lock Detection**: `github.com/IamFaizanKhalid/lock` with platform-specific implementations
 - **Testing**: `github.com/stretchr/testify` for comprehensive test coverage
+
+### Key Architectural Changes
+- **Eliminated HTTP Proxy**: No more custom HTTP server intercepting Docker socket calls
+- **Direct Docker Client**: Use Docker's official Go client library over SSH tunnel
+- **Simplified Connection Management**: Single SSH tunnel per server, no connection pooling
+- **Removed Server-Side Code**: No custom Go services on remote servers, just Docker daemon
+- **Streaming Fix**: Docker client handles streaming natively, fixing `docker run` freezing issues
 
 ### Security Considerations
 - **Credential Management**: Environment variables and secure file storage for API tokens

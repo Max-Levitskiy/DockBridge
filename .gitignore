@@ -29,3 +29,5 @@ go.work.sum
 /build
 /dist
 /bin
+
+config.yaml

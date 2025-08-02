@@ -2,20 +2,20 @@
 
 ## Introduction
 
-DockBridge is a sophisticated Go-based client-server system that automatically provisions Hetzner Cloud servers for Docker containers with intelligent laptop lock detection and keep-alive mechanisms. The system enables seamless Docker development workflows by transparently proxying Docker commands to remote Hetzner Cloud instances while managing server lifecycle based on user activity and connection status.
+DockBridge is a simplified Go-based client system that enables Docker development workflows by directly connecting to remote Hetzner Cloud servers using the Docker Go client library. The system has been refactored from a complex HTTP proxy approach to use Docker's native client library for better reliability and simpler code maintenance. The focus is on eliminating overcomplicated connection management and fixing issues with streaming commands like `docker run`.
 
 ## Requirements
 
 ### Requirement 1
 
-**User Story:** As a developer, I want to run Docker commands on my laptop that automatically execute on a remote Hetzner Cloud server, so that I can leverage cloud resources without changing my local development workflow.
+**User Story:** As a developer, I want to run Docker commands on my laptop that automatically execute on a remote Hetzner Cloud server using the Docker Go client, so that I can leverage cloud resources with reliable streaming support for commands like `docker run`.
 
 #### Acceptance Criteria
 
-1. WHEN a user executes a Docker command on their laptop THEN the system SHALL proxy the command to a remote Hetzner Cloud server
-2. WHEN the Docker command completes on the remote server THEN the system SHALL return the response to the local Docker client
+1. WHEN a user executes a Docker command on their laptop THEN the system SHALL use the Docker Go client to execute the command on a remote Hetzner Cloud server
+2. WHEN the Docker command completes on the remote server THEN the system SHALL stream the response directly to the local Docker client without buffering
 3. WHEN no Hetzner server exists THEN the system SHALL automatically provision a new server before executing the command
-4. IF the Docker socket proxy is not running THEN the system SHALL start the proxy service automatically
+4. WHEN executing streaming commands like `docker run` THEN the system SHALL provide real-time output without freezing
 
 ### Requirement 2
 
@@ -107,11 +107,11 @@ DockBridge is a sophisticated Go-based client-server system that automatically p
 
 ### Requirement 10
 
-**User Story:** As a developer, I want the system to handle multiple concurrent Docker operations, so that I can run parallel builds and operations efficiently.
+**User Story:** As a developer, I want simplified code architecture that eliminates complex connection management layers, so that the system is more maintainable and reliable.
 
 #### Acceptance Criteria
 
-1. WHEN multiple Docker commands are executed simultaneously THEN the system SHALL handle them concurrently
-2. WHEN server resources are insufficient THEN the system SHALL queue operations and provide status updates
-3. WHEN concurrent operations complete THEN each SHALL return results to the correct client session
-4. IF resource limits are exceeded THEN the system SHALL provide clear feedback about capacity constraints
+1. WHEN refactoring the system THEN the system SHALL eliminate the HTTP proxy layer and use Docker Go client directly
+2. WHEN connecting to remote servers THEN the system SHALL use simple SSH tunneling without complex connection pooling
+3. WHEN handling Docker commands THEN the system SHALL remove unnecessary abstraction layers and request handlers
+4. WHEN debugging issues THEN the system SHALL have clear, simple code paths that are easy to troubleshoot

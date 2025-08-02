@@ -48,14 +48,34 @@
   - Write unit tests with mocked Hetzner API responses
   - _Requirements: 1.3, 4.1, 4.2, 4.3, 6.1, 6.2, 6.3, 6.4_
 
-- [x] 7. Implement Docker socket proxy
-  - Create HTTP proxy server that intercepts Docker API calls in internal/client/docker/
-  - Implement request forwarding via SSH tunnels to remote Hetzner servers
-  - Add connection pooling and keep-alive support for performance optimization
-  - Handle Docker API streaming responses for large operations (image pulls, logs)
-  - Create automatic server provisioning trigger when no server exists
-  - Write unit tests for proxy functionality and request forwarding
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 10.1, 10.3_
+- [x] 7. Refactor to Docker Go client approach
+- [x] 7.1 Remove overcomplicated HTTP proxy layer
+  - Delete proxy.go, connection_manager.go, request_handler.go files
+  - Remove complex connection pooling and HTTP request forwarding logic
+  - Eliminate server_manager.go complexity and simplify server management
+  - Clean up unused interfaces and abstraction layers
+  - _Requirements: 10.1, 10.2, *10*.3, 10.4_
+
+- [x] 7.2 Implement Docker Go client manager
+  - Create simplified DockerClientManager using github.com/docker/docker/client
+  - Implement direct Docker API calls over SSH tunnel using client.Client
+  - Add context-aware operations for proper cancellation and timeouts
+  - Create simple connection management without complex pooling
+  - _Requirements: 1.1, 1.2, 1.4_
+
+- [x] 7.3 Fix docker run streaming issues
+  - Implement proper streaming support for docker run commands using Docker client
+  - Add real-time output streaming without buffering or freezing
+  - Handle container attach operations with proper TTY support
+  - Test docker run with interactive and non-interactive containers
+  - _Requirements: 1.1, 1.4_
+
+- [x] 7.4 Simplify server provisioning integration
+  - Update server provisioning to work with Docker client instead of HTTP proxy
+  - Remove server-side HTTP handler and use direct Docker daemon access
+  - Simplify SSH tunnel creation for Docker client connections
+  - Add automatic server provisioning when Docker client connection fails
+  - _Requirements: 1.3_
 
 - [ ] 8. Build cross-platform screen lock detection
   - Create base lock detector interface in internal/client/lockdetection/
@@ -75,31 +95,31 @@
   - Write unit tests for keep-alive client functionality
   - _Requirements: 3.1, 3.4, 9.1, 9.2_
 
-- [ ] 10. Create server-side Docker command handler
-  - Implement HTTP server that receives proxied Docker API calls in internal/server/docker/
-  - Create request handlers that forward calls to local Docker daemon
-  - Add proper HTTP response streaming for Docker API compatibility
-  - Implement concurrent request handling with goroutines
-  - Add error handling and proper HTTP status code responses
-  - Write unit tests for Docker command handling and API compatibility
+- [ ] 10. Simplify server-side components
+  - Remove complex server-side Docker handler and HTTP server implementation
+  - Create simple bash script for keep-alive monitoring instead of Go service
+  - Update cloud-init scripts to only setup Docker daemon and keep-alive script
+  - Eliminate server-side Go code and complex request handling
+  - Test direct Docker daemon access via SSH tunnel without proxy layer
+  - Write integration tests for simplified server setup
   - _Requirements: 1.1, 1.2, 10.1, 10.2, 10.3, 10.4_
 
-- [ ] 11. Build server-side keep-alive monitoring
-  - Create keep-alive monitor in internal/server/keepalive/ that tracks client heartbeats
-  - Implement timeout detection with configurable thresholds (5-minute default)
-  - Add client connection state management and tracking
-  - Create integration with lifecycle manager for timeout-triggered shutdowns
-  - Implement heartbeat message validation and processing
-  - Write unit tests for keep-alive monitoring and timeout detection
+- [ ] 11. Implement simplified keep-alive monitoring
+  - Create simple bash script for server-side keep-alive monitoring
+  - Implement file-based heartbeat mechanism instead of complex HTTP endpoints
+  - Add timeout detection with simple file timestamp checking
+  - Create integration with server shutdown via systemd or cron
+  - Deploy keep-alive script via cloud-init during server provisioning
+  - Write integration tests for simplified keep-alive mechanism
   - _Requirements: 3.2, 3.3_
 
-- [ ] 12. Implement server lifecycle management
-  - Create lifecycle manager in internal/server/lifecycle/ for graceful shutdown handling
-  - Implement volume detachment procedures before server termination
-  - Add self-destruction capability via Hetzner API calls
-  - Create shutdown cancellation mechanism for quick reconnects
-  - Implement proper cleanup procedures and resource management
-  - Write unit tests for lifecycle management scenarios
+- [ ] 12. Simplify server lifecycle management
+  - Remove complex server-side lifecycle manager and implement client-side management
+  - Implement volume detachment procedures from client before server termination
+  - Add server destruction capability via Hetzner API calls from client
+  - Create simple shutdown mechanism triggered by keep-alive timeout
+  - Implement proper cleanup procedures managed from client side
+  - Write unit tests for simplified lifecycle management scenarios
   - _Requirements: 2.2, 2.3, 2.4, 3.2, 3.3, 6.2, 6.3_
 
 - [ ] 13. Add network failure recovery and resilience
