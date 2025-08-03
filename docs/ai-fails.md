@@ -62,3 +62,41 @@ ssh: rejected: connect failed (open failed)
 - Use unit tests for proxy logic (already working perfectly)
 - Provide simple manual test instructions for real SSH servers
 - Focus on the core functionality rather than elaborate test setups
+---
+
+
+## DockBridge - Nil Pointer Dereference in convertServer
+
+**Date**: 2025-08-03  
+**Problem**: DockBridge client crashes with panic when provisioning new server
+
+**Error encountered**:
+```
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x2 addr=0x48 pc=0x102fb303c]
+goroutine 50 [running]:
+github.com/dockbridge/dockbridge/client/hetzner.convertServer(0x0)
+/Users/max/git/Max-Levitskiy/DockBridge/client/hetzner/utils.go:12 +0x1c
+```
+
+**Root cause**: The `convertServer` function in both `client/hetzner/utils.go` and `internal/client/hetzner/utils.go` didn't check for nil input before accessing server fields. When the Hetzner API returns a nil server (which can happen during server provisioning), the function would panic trying to access `server.PublicNet.IPv4.IP`.
+
+**What was fixed**:
+1. Added nil check at the beginning of `convertServer` function in both locations
+2. Added proper error handling in `ProvisionServer` method to check for nil server before conversion
+3. Updated `ListServers` method to filter out any nil servers defensively
+4. Added test cases to verify nil handling works correctly
+
+**Files modified**:
+- `client/hetzner/utils.go` - Added nil check in `convertServer`
+- `internal/client/hetzner/utils.go` - Added nil check in `convertServer`  
+- `client/hetzner/client.go` - Added nil checks in `ProvisionServer` and `ListServers`
+- `internal/client/hetzner/client.go` - Added nil checks in `ProvisionServer` and `ListServers`
+- `client/hetzner/client_test.go` - Added `TestConvertServerNil` test case
+- `internal/client/hetzner/client_test.go` - Added `TestConvertServerNil` test case
+
+**Lesson learned**: 
+- Always validate input parameters, especially pointers, before dereferencing them
+- API responses can be nil even when the call succeeds, especially during resource provisioning
+- Defensive programming prevents crashes and provides better error messages
+- Add test cases for edge cases like nil inputs
