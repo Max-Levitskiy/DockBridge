@@ -91,6 +91,12 @@ func (suite *HetznerClientTestSuite) TestConvertServer() {
 	suite.Equal("67890", server.VolumeID)
 }
 
+func (suite *HetznerClientTestSuite) TestConvertServerNil() {
+	// Test that convertServer handles nil input gracefully
+	server := convertServer(nil)
+	suite.Nil(server)
+}
+
 func (suite *HetznerClientTestSuite) TestConvertVolume() {
 	// Test volume conversion
 	hcloudVolume := &hcloud.Volume{

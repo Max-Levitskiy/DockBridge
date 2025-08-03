@@ -160,8 +160,16 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get created server")
 	}
+	if server == nil {
+		return nil, errors.New("created server not found")
+	}
 
-	return convertServer(server), nil
+	convertedServer := convertServer(server)
+	if convertedServer == nil {
+		return nil, errors.New("failed to convert server")
+	}
+
+	return convertedServer, nil
 }
 
 // DestroyServer terminates a server and cleans up resources
@@ -371,9 +379,11 @@ func (c *Client) ListServers(ctx context.Context) ([]*Server, error) {
 		return nil, errors.Wrap(err, "failed to list servers")
 	}
 
-	result := make([]*Server, len(servers))
-	for i, server := range servers {
-		result[i] = convertServer(server)
+	result := make([]*Server, 0, len(servers))
+	for _, server := range servers {
+		if converted := convertServer(server); converted != nil {
+			result = append(result, converted)
+		}
 	}
 
 	return result, nil

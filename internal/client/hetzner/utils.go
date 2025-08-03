@@ -8,6 +8,10 @@ import (
 
 // convertServer converts hcloud.Server to our Server type
 func convertServer(server *hcloud.Server) *Server {
+	if server == nil {
+		return nil
+	}
+
 	var ipAddress string
 	if server.PublicNet.IPv4.IP != nil {
 		ipAddress = server.PublicNet.IPv4.IP.String()
