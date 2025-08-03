@@ -32,7 +32,7 @@ func TestServerCommand(t *testing.T) {
 func TestServerCreateCommand(t *testing.T) {
 	// Check that the command has the expected properties
 	assert.Equal(t, "create", serverCreateCmd.Name())
-	assert.Equal(t, "Create a new Hetzner Cloud server", serverCreateCmd.Short)
+	assert.Equal(t, "Initialize and validate server configuration", serverCreateCmd.Short)
 
 	// Check that the command has the expected flags
 	assert.NotNil(t, serverCreateCmd.Flags().Lookup("config"))
@@ -41,7 +41,7 @@ func TestServerCreateCommand(t *testing.T) {
 func TestServerDestroyCommand(t *testing.T) {
 	// Check that the command has the expected properties
 	assert.Equal(t, "destroy", serverDestroyCmd.Name())
-	assert.Equal(t, "Destroy a Hetzner Cloud server", serverDestroyCmd.Short)
+	assert.Equal(t, "Destroy DockBridge servers", serverDestroyCmd.Short)
 
 	// Check that the command has the expected flags
 	assert.NotNil(t, serverDestroyCmd.Flags().Lookup("config"))
@@ -51,7 +51,7 @@ func TestServerDestroyCommand(t *testing.T) {
 func TestServerStatusCommand(t *testing.T) {
 	// Check that the command has the expected properties
 	assert.Equal(t, "status", serverStatusCmd.Name())
-	assert.Equal(t, "Check server status", serverStatusCmd.Short)
+	assert.Equal(t, "Check DockBridge server status", serverStatusCmd.Short)
 
 	// Check that the command has the expected flags
 	assert.NotNil(t, serverStatusCmd.Flags().Lookup("config"))

@@ -100,10 +100,12 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	// Set environment variables
 	os.Setenv("HETZNER_API_TOKEN", "env-token")
 	os.Setenv("DOCKBRIDGE_DOCKER_PROXY_PORT", "4000")
+	os.Setenv("DOCKER_SOCKET_PATH", "/var/run/docker.sock")
 	os.Setenv("LOG_LEVEL", "error")
 	defer func() {
 		os.Unsetenv("HETZNER_API_TOKEN")
 		os.Unsetenv("DOCKBRIDGE_DOCKER_PROXY_PORT")
+		os.Unsetenv("DOCKER_SOCKET_PATH")
 		os.Unsetenv("LOG_LEVEL")
 	}()
 
