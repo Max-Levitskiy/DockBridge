@@ -9,12 +9,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dockbridge/dockbridge/client/hetzner"
 	"github.com/dockbridge/dockbridge/client/ssh"
+	"github.com/dockbridge/dockbridge/internal/shared/config"
 	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/dockbridge/dockbridge/shared/config"
 	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 )
@@ -45,6 +46,9 @@ type dockerClientManagerImpl struct {
 	sshClient     ssh.Client
 	tunnel        ssh.TunnelInterface
 	dockerClient  *client.Client
+
+	// Synchronization to prevent race conditions
+	mu sync.Mutex
 }
 
 // NewDockerClientManager creates a new Docker client manager
@@ -86,7 +90,11 @@ func (dcm *dockerClientManagerImpl) GetClient(ctx context.Context) (*client.Clie
 
 // EnsureConnection ensures we have an active connection to a remote server with Docker ready
 func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error {
-	// Check if we already have an active connection
+	// Use mutex to prevent race conditions during server provisioning
+	dcm.mu.Lock()
+	defer dcm.mu.Unlock()
+
+	// Check if we already have an active connection (double-check after acquiring lock)
 	if dcm.isConnectionHealthy() {
 		dcm.logger.Debug("Using existing healthy connection")
 		return nil
@@ -245,19 +253,35 @@ func (dcm *dockerClientManagerImpl) createDockerTunnel(ctx context.Context) erro
 func (dcm *dockerClientManagerImpl) verifyDockerDaemonReady(ctx context.Context) error {
 	dcm.logger.Info("🐳 Verifying Docker daemon is ready...")
 
-	// Create Docker client if not exists
+	// Create Docker client if not exists (with proper nil checking)
+	// Note: This method is called from EnsureConnection which already holds the mutex
 	if dcm.dockerClient == nil {
 		dockerClient, err := dcm.createDockerClient()
 		if err != nil {
 			return errors.Wrap(err, "failed to create Docker client")
 		}
+		if dockerClient == nil {
+			return errors.New("createDockerClient returned nil client without error")
+		}
 		dcm.dockerClient = dockerClient
+	}
+
+	// Double-check that dockerClient is not nil before using it
+	if dcm.dockerClient == nil {
+		return errors.New("Docker client is nil after creation attempt")
 	}
 
 	// Try to ping Docker daemon with retries
 	maxRetries := 10
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+
+		// Additional nil check right before calling Ping
+		if dcm.dockerClient == nil {
+			cancel()
+			return errors.New("Docker client became nil during ping attempts")
+		}
+
 		_, err := dcm.dockerClient.Ping(pingCtx)
 		cancel()
 

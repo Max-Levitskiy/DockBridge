@@ -203,10 +203,21 @@ func (m *Manager) validateHetzner() error {
 func (m *Manager) validateDocker() error {
 	docker := &m.config.Docker
 
-	// Validate socket path exists (if not default, tcp mode, or port format)
+	// Validate socket path directory exists and is writable (DockBridge will create the socket)
 	if docker.SocketPath != "/var/run/docker.sock" && docker.SocketPath != "tcp" && !strings.HasPrefix(docker.SocketPath, ":") {
-		if _, err := os.Stat(docker.SocketPath); err != nil {
-			return fmt.Errorf("docker socket path '%s' does not exist or is not accessible", docker.SocketPath)
+		// Check if the directory exists and is writable
+		dir := filepath.Dir(docker.SocketPath)
+		if _, err := os.Stat(dir); err != nil {
+			return fmt.Errorf("directory for docker socket path '%s' does not exist: %s", docker.SocketPath, dir)
+		}
+
+		// Test if we can write to the directory by creating a temporary file
+		tempFile := filepath.Join(dir, ".dockbridge-test")
+		if file, err := os.Create(tempFile); err != nil {
+			return fmt.Errorf("cannot write to directory for docker socket path '%s': %s", docker.SocketPath, dir)
+		} else {
+			file.Close()
+			os.Remove(tempFile)
 		}
 	}
 

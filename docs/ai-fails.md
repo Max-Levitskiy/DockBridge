@@ -100,3 +100,59 @@ github.com/dockbridge/dockbridge/client/hetzner.convertServer(0x0)
 - API responses can be nil even when the call succeeds, especially during resource provisioning
 - Defensive programming prevents crashes and provides better error messages
 - Add test cases for edge cases like nil inputs
+-
+--
+
+## DockBridge - Nil Pointer Dereference in Docker Client During Concurrent Server Provisioning
+
+**Date**: 2025-08-03  
+**Problem**: Panic with nil pointer dereference when multiple Docker connections try to provision servers simultaneously
+
+**Error encountered**:
+```
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x2 addr=0x40 pc=0x1011290e4]
+
+goroutine 30 [running]:
+github.com/docker/docker/client.(*Client).Ping(0x0, {0x10149efc0, 0x1400025c1c0})
+```
+
+**Root cause**: 
+- Multiple Docker client connections trigger concurrent server provisioning
+- Race condition in the old complex implementation's `client/docker/client_manager.go`
+- Docker client is nil when `Ping()` is called during verification
+- The old implementation tries to handle multiple connections without proper synchronization
+
+**Context**: 
+- User is running the old complex implementation (`bin/dockbridge`) instead of the new simplified one
+- The new simplified implementation we created uses ssh-docker-proxy and avoids this complexity
+- This demonstrates why the simplified architecture is better - it eliminates these race conditions
+
+**Solutions**:
+1. **Recommended**: Switch to the new simplified implementation that uses ssh-docker-proxy
+2. **Alternative**: Fix the race condition in the old implementation with proper synchronization
+
+**Lesson learned**: 
+- Concurrent server provisioning needs careful synchronization
+- The simplified architecture eliminates these complex race conditions
+- Always ensure only one server provisioning operation happens at a time
+**Sol
+ution Applied**:
+1. **Added proper nil checks** in `verifyDockerDaemonReady()` method:
+   - Check if `createDockerClient()` returns nil without error
+   - Double-check `dockerClient` is not nil before calling `Ping()`
+   - Additional nil check right before each `Ping()` call
+
+2. **Added synchronization** to prevent race conditions:
+   - Added `mu sync.Mutex` to `dockerClientManagerImpl` struct
+   - Added `dcm.mu.Lock()` and `defer dcm.mu.Unlock()` in `EnsureConnection()` method
+   - This ensures only one goroutine can provision servers at a time
+
+3. **Improved error messages** for better debugging:
+   - Clear error messages when Docker client is nil
+   - Better context about which step failed
+
+**Files modified**:
+- `client/docker/client_manager.go` - Added mutex and nil checks
+
+**Result**: Eliminates the race condition that caused concurrent server provisioning to create nil Docker clients.

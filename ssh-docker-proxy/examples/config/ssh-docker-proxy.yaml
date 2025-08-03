@@ -1,0 +1,15 @@
+# SSH Docker Proxy Configuration Example
+
+# Local Unix socket path where the proxy will listen
+local_socket: "/tmp/docker.sock"
+
+# SSH connection details
+ssh_user: "ubuntu"
+ssh_host: "your-server.example.com:22"
+ssh_key_path: "~/.ssh/id_rsa"
+
+# Remote Docker socket path (optional, defaults to /var/run/docker.sock)
+remote_socket: "/var/run/docker.sock"
+
+# SSH connection timeout (optional, defaults to 10s)
+timeout: "10s"

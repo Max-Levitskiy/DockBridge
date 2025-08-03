@@ -1,152 +1,184 @@
 # SSH Docker Proxy
 
-A Go-based proxy that forwards Docker API requests to remote Docker daemons over SSH connections.
+A lightweight, transparent proxy that forwards Docker API requests from local clients to remote Docker daemons over SSH connections. This enables seamless use of local Docker CLI tools against remote Docker instances while maintaining full compatibility with all Docker features.
 
 ## Features
 
-- **Pure HTTP Proxy**: Forwards raw bytes without Docker-specific parsing
-- **SSH Transport**: Secure, authenticated connections to remote hosts  
-- **Per-Connection Isolation**: Fresh SSH streams for each Docker client
-- **Streaming Support**: Full compatibility with `docker logs -f`, `docker exec -it`, etc.
-- **Concurrent Connections**: Multiple Docker operations simultaneously
-- **Graceful Shutdown**: Proper cleanup and resource management
+- **Transparent Proxying**: Pure byte-level forwarding without Docker-specific parsing
+- **SSH Security**: All traffic encrypted via SSH tunnels
+- **Full Docker Compatibility**: Supports all Docker commands including streaming operations
+- **Concurrent Connections**: Handle multiple Docker clients simultaneously
+- **Library + CLI**: Use as standalone tool or integrate into other applications
+- **Health Checking**: Verify remote Docker daemon accessibility before starting
 
 ## Quick Start
 
-### 1. Build the Proxy
+### CLI Usage
 
 ```bash
-make build
-```
-
-### 2. Test with Your Remote Server
-
-Set up environment variables for your remote server:
-
-```bash
-export SSH_HOST=your-server.com:22
-export SSH_USER=your-username  
-export SSH_KEY=~/.ssh/id_rsa
-./test-local.sh
-```
-
-### 3. Start the Proxy
-
-```bash
-./bin/ssh-docker-proxy \
-  -ssh-user=your-username \
-  -ssh-host=your-server.com:22 \
+# Using command-line flags
+ssh-docker-proxy \
+  -ssh-user=ubuntu \
+  -ssh-host=192.168.1.100 \
   -ssh-key=~/.ssh/id_rsa \
-  -local-socket=/tmp/docker-proxy.sock
+  -local-socket=/tmp/docker.sock
+
+# Using configuration file
+ssh-docker-proxy -config=config.yaml
 ```
 
-### 4. Use Docker Commands
-
-In another terminal:
-
+Then in another terminal:
 ```bash
-export DOCKER_HOST=unix:///tmp/docker-proxy.sock
-docker version
+export DOCKER_HOST=unix:///tmp/docker.sock
 docker ps
-docker run --rm alpine:latest echo "Hello from remote Docker!"
-```
-
-## Configuration
-
-### Command Line Flags
-
-```bash
-./bin/ssh-docker-proxy --help
 ```
 
 ### Configuration File
 
-Create `config.yaml`:
+Create `ssh-docker-proxy.yaml`:
 
 ```yaml
-local_socket: "/tmp/docker-proxy.sock"
-ssh_user: "your-username"
-ssh_host: "your-server.com:22"
+local_socket: "/tmp/docker.sock"
+ssh_user: "ubuntu"
+ssh_host: "your-server.example.com:22"
 ssh_key_path: "~/.ssh/id_rsa"
 remote_socket: "/var/run/docker.sock"
-timeout: 10s
+timeout: "10s"
 ```
 
-Then run:
+### Library Usage
+
+```go
+package main
+
+import (
+    "context"
+    ssh_docker_proxy "ssh-docker-proxy"
+)
+
+func main() {
+    config := &ssh_docker_proxy.ProxyConfig{
+        LocalSocket:  "/tmp/docker.sock",
+        SSHUser:      "ubuntu",
+        SSHHost:      "your-server.example.com",
+        SSHKeyPath:   "~/.ssh/id_rsa",
+        RemoteSocket: "/var/run/docker.sock",
+        Timeout:      "10s",
+    }
+
+    proxy, err := ssh_docker_proxy.NewProxy(config, nil)
+    if err != nil {
+        panic(err)
+    }
+
+    ctx := context.Background()
+    if err := proxy.Start(ctx); err != nil {
+        panic(err)
+    }
+}
+```
+
+## Installation
 
 ```bash
-./bin/ssh-docker-proxy -config=config.yaml
+go install ssh-docker-proxy/cmd/ssh-docker-proxy@latest
 ```
 
-## Testing
-
-### Unit Tests
+Or build from source:
 
 ```bash
-go test ./...
+git clone <repository>
+cd ssh-docker-proxy
+go build -o ssh-docker-proxy cmd/ssh-docker-proxy/main.go
 ```
 
-### Integration Test
+## Configuration Options
 
-```bash
-./test-local.sh
-```
+| Flag | Config File | Description | Default |
+|------|-------------|-------------|---------|
+| `-local-socket` | `local_socket` | Local Unix socket path | Required |
+| `-ssh-user` | `ssh_user` | SSH username | Required |
+| `-ssh-host` | `ssh_host` | SSH hostname with optional port | Required |
+| `-ssh-key` | `ssh_key_path` | Path to SSH private key file | Required |
+| `-remote-socket` | `remote_socket` | Remote Docker socket path | `/var/run/docker.sock` |
+| `-timeout` | `timeout` | SSH connection timeout | `10s` |
+| `-config` | N/A | Path to configuration file | Auto-detected |
 
 ## Supported Docker Operations
 
-- ✅ **Basic Commands**: `docker ps`, `docker images`, `docker version`
-- ✅ **Container Management**: `docker run`, `docker stop`, `docker rm`
-- ✅ **Image Operations**: `docker pull`, `docker push`, `docker build`
-- ✅ **Streaming**: `docker logs -f`, `docker exec -it`, `docker attach`
-- ✅ **Large Transfers**: Multi-GB build contexts and image layers
-
-## Requirements
-
-- Go 1.23+
-- SSH access to remote server with Docker installed
-- SSH key-based authentication configured
+- ✅ Container operations (`run`, `exec`, `logs`, `attach`)
+- ✅ Image operations (`pull`, `push`, `build`)
+- ✅ Network operations
+- ✅ Volume operations
+- ✅ System operations (`info`, `version`)
+- ✅ Interactive sessions (`docker exec -it`)
+- ✅ Streaming operations (`docker logs -f`)
+- ✅ Large file transfers (`docker build` with large contexts)
 
 ## Architecture
 
 ```
-Local Docker Client → Unix Socket → SSH Docker Proxy → SSH → Remote Docker Daemon
+Local Machine                    Remote Host
+┌─────────────────┐             ┌──────────────────┐
+│ Docker Client   │             │ Docker Daemon    │
+│                 │             │                  │
+│ docker ps   ────┼─────────────┼──► /var/run/     │
+│                 │   SSH       │    docker.sock   │
+│                 │   Tunnel    │                  │
+└─────────────────┘             └──────────────────┘
+        │
+        ▼
+┌─────────────────┐
+│ SSH Docker      │
+│ Proxy           │
+│                 │
+│ /tmp/docker.sock│
+└─────────────────┘
 ```
 
-The proxy creates a Unix socket that Docker clients connect to, then forwards all traffic over SSH to the remote Docker daemon using pure byte relay.
+## Error Handling
+
+The proxy categorizes errors for better troubleshooting:
+
+- **CONFIG**: Configuration validation errors
+- **SSH**: SSH connection and authentication errors  
+- **DOCKER**: Docker daemon connectivity errors
+- **RUNTIME**: Proxy runtime errors
+
+## Testing
+
+Run unit tests:
+```bash
+go test ./...
+```
+
+Manual testing with a real SSH server:
+```bash
+# Terminal 1: Start proxy
+ssh-docker-proxy -ssh-user=ubuntu -ssh-host=your-server -ssh-key=~/.ssh/id_rsa -local-socket=/tmp/test.sock
+
+# Terminal 2: Test Docker commands
+export DOCKER_HOST=unix:///tmp/test.sock
+docker version
+docker run hello-world
+```
 
 ## Troubleshooting
 
-### Common Issues
+### SSH Connection Issues
+- Verify SSH key permissions: `chmod 600 ~/.ssh/id_rsa`
+- Test SSH connection: `ssh -i ~/.ssh/id_rsa user@host`
+- Check SSH server configuration allows key authentication
 
-1. **"Connection refused"**: Check if proxy is running and socket path is correct
-2. **"SSH connection failed"**: Verify SSH credentials and host accessibility  
-3. **"Docker daemon unreachable"**: Ensure Docker is running on remote host
-4. **Permission denied**: Check SSH key permissions (should be 600)
+### Docker Daemon Issues
+- Verify Docker daemon is running on remote host
+- Check Docker socket permissions on remote host
+- Test Docker access: `ssh user@host 'docker ps'`
 
-### Debug Mode
-
-Add verbose logging by checking proxy output for connection details.
-
-### Test SSH Connection
-
-```bash
-ssh -i ~/.ssh/id_rsa username@hostname 'docker ps'
-```
-
-## Performance
-
-- **Latency**: Near-zero overhead, limited only by SSH connection latency
-- **Throughput**: Achieves full SSH connection bandwidth
-- **Memory**: Constant ~32KB buffer usage per connection
-- **Concurrency**: No degradation with multiple simultaneous operations
-
-## Security
-
-- Uses SSH for encrypted, authenticated connections
-- No Docker credentials stored locally
-- Supports SSH key-based authentication
-- Per-connection isolation prevents cross-talk
+### Permission Issues
+- Ensure local socket directory is writable
+- Check Docker group membership on remote host
 
 ## License
 
-MIT License - see LICENSE file for details.
+[Add your license here]

@@ -2,10 +2,10 @@
 
 ## Overview
 
-DockBridge is a simplified client system built in Go that enables seamless Docker development workflows by directly connecting to remote Hetzner Cloud servers using the Docker Go client library. The system has been refactored from a complex HTTP proxy approach to eliminate overcomplicated connection management and fix streaming issues with commands like `docker run`.
+DockBridge is a simplified client system built in Go that enables seamless Docker development workflows by automatically provisioning Hetzner Cloud servers on-demand and using the ssh-docker-proxy library for transparent Docker command forwarding. The system focuses on cost optimization through intelligent server lifecycle management while providing a simple, reliable user experience.
 
 The simplified architecture has one main component:
-- **Client**: Runs locally, uses Docker Go client over SSH tunnel to communicate directly with remote Docker daemon, manages server lifecycle and keep-alive messaging
+- **Client**: Runs locally, uses ssh-docker-proxy library for Docker forwarding, manages server lifecycle and keep-alive messaging
 
 ## Architecture
 
@@ -14,119 +14,110 @@ The simplified architecture has one main component:
 ```mermaid
 graph TB
     subgraph "Local Laptop"
-        DC[Docker Client] --> DGC[Docker Go Client]
-        DGC --> SSH[SSH Tunnel]
-        CLI[CLI Interface] --> CM[Configuration Manager]
-        LD[Lock Detector] --> KAC[Keep-Alive Client]
-        KAC --> SSH
+        DC[Docker Client] --> SDP[SSH Docker Proxy]
+        CLI[CLI Interface] --> SM[Server Manager]
+        LD[Lock Detector] --> LM[Lifecycle Manager]
+        KAC[Keep-Alive Client] --> LM
+        SM --> HC[Hetzner Client]
+        LM --> SM
     end
     
     subgraph "Hetzner Cloud"
-        SSH --> DD[Docker Daemon]
-        KAC --> KAM[Keep-Alive Monitor]
-        KAM --> LM[Lifecycle Manager]
-        LM --> HA[Hetzner API]
+        SDP --> DD[Docker Daemon]
+        HC --> SRV[Server Management]
+        HC --> VOL[Volume Management]
+        HC --> KEY[SSH Key Management]
         PV[Persistent Volume] --> DD
     end
     
-    subgraph "Hetzner API"
-        HA --> SRV[Server Management]
-        HA --> VOL[Volume Management]
-        HA --> KEY[SSH Key Management]
+    subgraph "Remote Server"
+        DD --> KAM[Keep-Alive Monitor Script]
+        KAM --> SD[Self-Destruct]
     end
 ```
 
-### Simplified Component Interaction Flow
+### Component Interaction Flow
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant DC as Docker Client
-    participant DGC as Docker Go Client
+    participant CLI as DockBridge CLI
+    participant SDP as SSH Docker Proxy
+    participant SM as Server Manager
     participant HC as Hetzner Client
     participant DD as Docker Daemon
     
-    U->>DC: docker run hello-world
-    DC->>DGC: Direct Docker API Call
-    DGC->>HC: Check server status
-    alt No server exists
-        HC->>HC: Provision new server
-    end
-    DGC->>DD: Direct Docker API call via SSH tunnel
-    DD->>DGC: Stream response directly
-    DGC->>DC: Stream response
-    DC->>U: Display real-time output
+    U->>CLI: dockbridge start
+    CLI->>SM: Initialize server manager
+    CLI->>SDP: Start proxy (lazy connection)
+    
+    U->>SDP: docker run hello-world
+    SDP->>SM: Connection failed - need server
+    SM->>HC: Provision server
+    HC->>HC: Create server + volume
+    SM->>SDP: Server ready, retry connection
+    SDP->>DD: Forward Docker command
+    DD->>SDP: Stream response
+    SDP->>U: Display output
 ```
 
 ## Components and Interfaces
 
-### Client Components
-
-#### 1. Docker Client Manager (`internal/client/docker/`)
+### 1. Server Manager (`internal/server/`)
 **Interface:**
 ```go
-type DockerClientManager interface {
-    GetClient(ctx context.Context) (*client.Client, error)
-    EnsureConnection(ctx context.Context) error
-    Close() error
-}
-```
-
-**Responsibilities:**
-- Creates Docker Go client instances connected to remote servers via SSH tunnel
-- Manages simple SSH tunnel connections without complex pooling
-- Handles Docker client lifecycle and connection management
-- Provides direct access to Docker API without HTTP proxy layer
-
-**Key Implementation Details:**
-```go
-// Simplified Docker client creation over SSH tunnel
-func (dcm *DockerClientManager) GetClient(ctx context.Context) (*client.Client, error) {
-    // Ensure SSH tunnel is established
-    if err := dcm.ensureSSHTunnel(ctx); err != nil {
-        return nil, err
-    }
-    
-    // Create Docker client pointing to SSH tunnel
-    dockerClient, err := client.NewClientWithOpts(
-        client.WithHost(fmt.Sprintf("tcp://%s", dcm.tunnel.LocalAddr())),
-        client.WithAPIVersionNegotiation(),
-    )
-    if err != nil {
-        return nil, err
-    }
-    
-    return dockerClient, nil
-}
-```
-
-**Benefits of This Approach:**
-- **Native Streaming**: Docker client handles streaming responses natively, fixing `docker run` freezing
-- **Simplified Code**: Eliminates 3 complex files (proxy.go, connection_manager.go, request_handler.go)
-- **Better Error Handling**: Docker client provides proper error context and retry mechanisms
-- **Reduced Latency**: Direct API calls without HTTP proxy overhead
-- **Easier Debugging**: Clear code path from CLI command to Docker daemon
-
-#### 2. Hetzner Client (`internal/client/hetzner/`)
-**Interface:**
-```go
-type HetznerClient interface {
-    ProvisionServer(ctx context.Context, config *ServerConfig) (*Server, error)
+type ServerManager interface {
+    EnsureServer(ctx context.Context) (*ServerInfo, error)
     DestroyServer(ctx context.Context, serverID string) error
-    CreateVolume(ctx context.Context, size int, location string) (*Volume, error)
-    AttachVolume(ctx context.Context, serverID, volumeID string) error
-    ManageSSHKeys(ctx context.Context) error
+    GetServerStatus(ctx context.Context) (*ServerStatus, error)
+    ListServers(ctx context.Context) ([]*ServerInfo, error)
 }
 ```
 
 **Responsibilities:**
-- Server provisioning with Docker CE pre-installed
-- Volume creation and attachment management
-- SSH key generation, upload, and rotation
-- Cloud-init script deployment for server configuration
-- Resource cleanup and cost optimization
+- Manages server lifecycle (provision, destroy, status)
+- Integrates with Hetzner API for server operations
+- Handles volume creation and attachment
+- Manages SSH key deployment
+- Provides server information to other components
 
-#### 3. Lock Detector (`internal/client/lockdetection/`)
+### 2. Proxy Manager (`internal/proxy/`)
+**Interface:**
+```go
+type ProxyManager interface {
+    Start(ctx context.Context, config *ProxyConfig) error
+    Stop() error
+    IsRunning() bool
+    GetStatus() *ProxyStatus
+}
+```
+
+**Responsibilities:**
+- Wraps ssh-docker-proxy library
+- Handles lazy connection establishment
+- Triggers server provisioning when connections fail
+- Manages proxy lifecycle and configuration
+- Provides connection status information
+
+### 3. Lifecycle Manager (`internal/lifecycle/`)
+**Interface:**
+```go
+type LifecycleManager interface {
+    Start(ctx context.Context) error
+    Stop() error
+    RegisterLockHandler(handler LockHandler)
+    RegisterIdleHandler(handler IdleHandler)
+}
+```
+
+**Responsibilities:**
+- Monitors laptop lock/unlock events
+- Tracks Docker command activity
+- Manages server shutdown timers
+- Coordinates with server manager for cleanup
+- Handles keep-alive client operations
+
+### 4. Lock Detector (`internal/lockdetection/`)
 **Interface:**
 ```go
 type LockDetector interface {
@@ -145,7 +136,7 @@ type LockEvent struct {
 - **macOS**: Core Graphics session state monitoring  
 - **Windows**: Win32 API desktop switching detection
 
-#### 4. Keep-Alive Client (`internal/client/keepalive/`)
+### 5. Keep-Alive Client (`internal/keepalive/`)
 **Interface:**
 ```go
 type KeepAliveClient interface {
@@ -159,40 +150,13 @@ type KeepAliveClient interface {
 - Sends periodic heartbeat messages (30-second intervals)
 - Implements exponential backoff for network failures
 - Handles connection recovery and retry logic
-- Coordinates with lock detector for graceful shutdowns
-
-### Simplified Server Components
-
-The server-side complexity has been eliminated. The remote Hetzner servers now only need:
-
-#### 1. Docker Daemon
-- Standard Docker daemon running on the remote server
-- Accessible via SSH tunnel on port 2376 or Unix socket
-- No custom server-side code required
-
-#### 2. Keep-Alive Monitor (Simple Script)
-**Interface:**
-```bash
-#!/bin/bash
-# Simple keep-alive monitor script deployed to server
-```
-
-**Responsibilities:**
-- Simple bash script that monitors for client heartbeats
-- Shuts down server if no heartbeat received within timeout
-- Minimal implementation without complex state management
-
-#### 3. Server Lifecycle (Cloud-init)
-**Responsibilities:**
-- Server provisioning and setup handled via cloud-init scripts
-- Volume attachment managed through Hetzner API from client
-- Self-destruction triggered by simple keep-alive timeout
+- Coordinates with lifecycle manager for status updates
 
 ## Data Models
 
 ### Configuration Models
 ```go
-type ClientConfig struct {
+type Config struct {
     Hetzner    HetznerConfig    `yaml:"hetzner"`
     Docker     DockerConfig     `yaml:"docker"`
     KeepAlive  KeepAliveConfig  `yaml:"keepalive"`
@@ -208,14 +172,13 @@ type HetznerConfig struct {
 }
 
 type DockerConfig struct {
-    SocketPath string `yaml:"socket_path" default:"/var/run/docker.sock"`
-    ProxyPort  int    `yaml:"proxy_port" default:"2376"`
+    SocketPath string `yaml:"socket_path" default:"/tmp/dockbridge.sock"`
 }
 ```
 
 ### Server State Models
 ```go
-type Server struct {
+type ServerInfo struct {
     ID          string            `json:"id"`
     Name        string            `json:"name"`
     Status      ServerStatus      `json:"status"`
@@ -234,21 +197,16 @@ const (
 )
 ```
 
-### Keep-Alive Models
+### Proxy State Models
 ```go
-type HeartbeatMessage struct {
-    ClientID    string            `json:"client_id"`
-    Timestamp   time.Time         `json:"timestamp"`
-    Status      ClientStatus      `json:"status"`
-    Metadata    map[string]string `json:"metadata"`
+type ProxyStatus struct {
+    Running       bool      `json:"running"`
+    LocalSocket   string    `json:"local_socket"`
+    RemoteServer  string    `json:"remote_server"`
+    Connected     bool      `json:"connected"`
+    LastActivity  time.Time `json:"last_activity"`
+    BytesTransferred int64  `json:"bytes_transferred"`
 }
-
-type ClientStatus string
-const (
-    StatusActive   ClientStatus = "active"
-    StatusLocked   ClientStatus = "locked"
-    StatusOffline  ClientStatus = "offline"
-)
 ```
 
 ## Error Handling
@@ -259,7 +217,7 @@ type ErrorCategory string
 const (
     ErrCategoryNetwork     ErrorCategory = "network"
     ErrCategoryHetzner     ErrorCategory = "hetzner"
-    ErrCategoryDocker      ErrorCategory = "docker"
+    ErrCategoryProxy       ErrorCategory = "proxy"
     ErrCategorySSH         ErrorCategory = "ssh"
     ErrCategoryConfig      ErrorCategory = "config"
     ErrCategoryLockDetect  ErrorCategory = "lock_detection"
@@ -278,7 +236,7 @@ type DockBridgeError struct {
 ### Retry Strategies
 - **Network failures**: Exponential backoff with jitter (1s, 2s, 4s, 8s, max 60s)
 - **Hetzner API rate limits**: Respect rate limit headers with backoff
-- **Docker command failures**: Immediate retry up to 3 attempts
+- **Proxy connection failures**: Trigger server provisioning, then retry
 - **SSH connection failures**: Progressive timeout increase (5s, 15s, 30s)
 
 ### Graceful Degradation
@@ -286,75 +244,72 @@ type DockBridgeError struct {
 - **Partial failures**: Continue operation with reduced functionality
 - **Resource constraints**: Implement circuit breakers for external services
 
-## Testing Strategy
+## Implementation Strategy
 
-### Unit Testing Framework
-Using `github.com/stretchr/testify` with comprehensive test suites:
+### Phase 1: Core Infrastructure
+1. **Project Structure**: Clean up existing complex implementation
+2. **Configuration**: Simplify configuration management
+3. **Server Manager**: Create simple server lifecycle management
+4. **Proxy Integration**: Integrate ssh-docker-proxy library
 
-```go
-type DockerProxyTestSuite struct {
-    suite.Suite
-    mockHetznerClient *mocks.HetznerClient
-    mockSSHClient     *mocks.SSHClient
-    proxy            *DockerProxy
-    testServer       *httptest.Server
-}
+### Phase 2: Lifecycle Management
+1. **Lock Detection**: Implement cross-platform lock detection
+2. **Keep-Alive**: Create simple keep-alive mechanism
+3. **Lifecycle Coordination**: Connect lock detection with server management
 
-func (suite *DockerProxyTestSuite) TestForwardDockerCommand() {
-    // Arrange
-    expectedResponse := &http.Response{StatusCode: 200}
-    suite.mockSSHClient.On("ForwardHTTP", mock.Anything).Return(expectedResponse, nil)
-    
-    // Act
-    response, err := suite.proxy.ForwardRequest(testRequest)
-    
-    // Assert
-    suite.NoError(err)
-    suite.Equal(200, response.StatusCode)
-    suite.mockSSHClient.AssertExpectations(suite.T())
-}
-```
+### Phase 3: User Experience
+1. **CLI Interface**: Simple start/stop/status commands
+2. **Error Handling**: User-friendly error messages
+3. **Logging**: Structured logging with appropriate levels
+4. **Documentation**: Usage guides and troubleshooting
 
-### Integration Testing
-- **Hetzner API Integration**: Test server provisioning with real API calls using test credentials
-- **Docker Compatibility**: Validate all major Docker commands work correctly
-- **End-to-End Workflows**: Test complete user scenarios from command to response
+## Key Architectural Decisions
 
-### Performance Testing
-- **Latency Benchmarks**: Measure Docker command response times vs local execution
-- **Concurrent Operations**: Test system behavior under multiple simultaneous Docker commands
-- **Resource Usage**: Monitor memory and CPU usage during extended operations
+### 1. Use ssh-docker-proxy Library
+**Decision**: Integrate ssh-docker-proxy as a library instead of building custom Docker forwarding
+**Rationale**: 
+- Proven, working solution for Docker command forwarding
+- Eliminates complex HTTP proxy implementation
+- Focuses DockBridge on its unique value: server lifecycle management
 
-### Security Testing
-- **SSH Key Management**: Validate key generation, rotation, and secure storage
-- **Network Security**: Test encrypted communication channels
-- **API Token Handling**: Ensure secure storage and transmission of credentials
+### 2. Lazy Server Provisioning
+**Decision**: Only provision servers when Docker commands are actually executed
+**Rationale**:
+- Minimizes costs by avoiding idle servers
+- Provides better user experience (fast startup)
+- Aligns with on-demand usage patterns
+
+### 3. Simple Keep-Alive Mechanism
+**Decision**: Use simple file-based heartbeat instead of complex HTTP endpoints
+**Rationale**:
+- Reduces server-side complexity
+- More reliable than HTTP-based solutions
+- Easier to debug and maintain
+
+### 4. Client-Side Server Management
+**Decision**: Manage all server lifecycle operations from the client
+**Rationale**:
+- Eliminates need for complex server-side code
+- Provides better control and visibility
+- Simplifies debugging and troubleshooting
 
 ## Technology Stack
 
 ### Core Dependencies
-- **Docker Integration**: `github.com/docker/docker/client` for direct Docker API access (primary change)
+- **Docker Forwarding**: ssh-docker-proxy library (local dependency)
 - **Hetzner Cloud**: `github.com/hetznercloud/hcloud-go/v2/hcloud` for cloud resource management
-- **SSH Communication**: `golang.org/x/crypto/ssh` for simple tunnel creation (no complex wrappers)
 - **CLI Framework**: `github.com/spf13/cobra` with `github.com/spf13/viper` for configuration
-- **Lock Detection**: `github.com/IamFaizanKhalid/lock` with platform-specific implementations
+- **Lock Detection**: Platform-specific implementations using system APIs
 - **Testing**: `github.com/stretchr/testify` for comprehensive test coverage
-
-### Key Architectural Changes
-- **Eliminated HTTP Proxy**: No more custom HTTP server intercepting Docker socket calls
-- **Direct Docker Client**: Use Docker's official Go client library over SSH tunnel
-- **Simplified Connection Management**: Single SSH tunnel per server, no connection pooling
-- **Removed Server-Side Code**: No custom Go services on remote servers, just Docker daemon
-- **Streaming Fix**: Docker client handles streaming natively, fixing `docker run` freezing issues
 
 ### Security Considerations
 - **Credential Management**: Environment variables and secure file storage for API tokens
 - **SSH Security**: RSA 4096-bit keys with regular rotation
-- **Network Security**: TLS 1.3 for all HTTP communications
+- **Network Security**: All Docker traffic encrypted via SSH tunnels
 - **Access Control**: Principle of least privilege for Hetzner API permissions
 
 ### Performance Optimizations
-- **Connection Pooling**: Reuse HTTP connections for Docker API calls
-- **Concurrent Processing**: Goroutine-based handling of multiple Docker operations
-- **Caching**: Local cache for server state and configuration
-- **Compression**: Enable gzip compression for large Docker image transfers
+- **Lazy Loading**: Only provision resources when needed
+- **Connection Reuse**: Maintain persistent SSH connections
+- **Concurrent Processing**: Goroutine-based handling of multiple operations
+- **Efficient Transfers**: Leverage ssh-docker-proxy's optimized byte copying

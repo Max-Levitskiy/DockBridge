@@ -2,116 +2,126 @@
 
 ## Introduction
 
-DockBridge is a simplified Go-based client system that enables Docker development workflows by directly connecting to remote Hetzner Cloud servers using the Docker Go client library. The system has been refactored from a complex HTTP proxy approach to use Docker's native client library for better reliability and simpler code maintenance. The focus is on eliminating overcomplicated connection management and fixing issues with streaming commands like `docker run`.
+DockBridge is a simplified Go-based system that enables seamless Docker development workflows by automatically provisioning Hetzner Cloud servers on-demand and using the ssh-docker-proxy library for transparent Docker command forwarding. The system focuses on cost optimization through intelligent server lifecycle management while providing a simple, reliable user experience.
 
 ## Requirements
 
 ### Requirement 1
 
-**User Story:** As a developer, I want to run Docker commands on my laptop that automatically execute on a remote Hetzner Cloud server using the Docker Go client, so that I can leverage cloud resources with reliable streaming support for commands like `docker run`.
+**User Story:** As a developer, I want to run Docker commands locally that automatically execute on remote Hetzner servers, so that I can leverage cloud compute resources without manual server management.
 
 #### Acceptance Criteria
 
-1. WHEN a user executes a Docker command on their laptop THEN the system SHALL use the Docker Go client to execute the command on a remote Hetzner Cloud server
-2. WHEN the Docker command completes on the remote server THEN the system SHALL stream the response directly to the local Docker client without buffering
-3. WHEN no Hetzner server exists THEN the system SHALL automatically provision a new server before executing the command
-4. WHEN executing streaming commands like `docker run` THEN the system SHALL provide real-time output without freezing
+1. WHEN a user runs `dockbridge start` THEN the system SHALL initialize but NOT provision servers until Docker commands are executed
+2. WHEN a user runs a Docker command THEN the system SHALL automatically provision a Hetzner server if none exists
+3. WHEN the server is provisioned THEN the system SHALL use ssh-docker-proxy to forward Docker commands transparently
+4. WHEN Docker commands complete THEN the system SHALL return results exactly as if running locally
+5. WHEN multiple Docker commands are run THEN they SHALL all use the same provisioned server
 
 ### Requirement 2
 
-**User Story:** As a developer, I want the system to automatically shut down remote servers when I lock my laptop, so that I don't incur unnecessary cloud costs when I'm not actively developing.
+**User Story:** As a developer, I want servers to be automatically destroyed when I'm not using them, so that I minimize cloud costs.
 
 #### Acceptance Criteria
 
-1. WHEN the user's laptop screen is locked THEN the system SHALL detect the lock event within 30 seconds
-2. WHEN a screen lock is detected THEN the system SHALL initiate graceful shutdown of the remote Hetzner server
-3. WHEN shutting down the server THEN the system SHALL preserve any persistent volumes for future use
-4. IF the laptop is unlocked within 5 minutes THEN the system SHALL cancel the shutdown process
+1. WHEN my laptop screen is locked THEN the system SHALL detect the lock within 30 seconds
+2. WHEN a screen lock is detected THEN the system SHALL initiate server shutdown after a 5-minute grace period
+3. WHEN shutting down servers THEN the system SHALL preserve persistent volumes for future use
+4. WHEN the laptop is unlocked within the grace period THEN the system SHALL cancel the shutdown
+5. WHEN no Docker commands are run for 30 minutes THEN the system SHALL automatically destroy the server
 
 ### Requirement 3
 
-**User Story:** As a developer, I want the system to maintain a keep-alive connection with remote servers, so that servers are automatically cleaned up if my laptop loses connectivity.
-
-#### Acceptance Criteria
-
-1. WHEN a remote server is running THEN the client SHALL send keep-alive messages every 30 seconds
-2. WHEN the server doesn't receive a keep-alive message for 5 minutes THEN the server SHALL initiate self-destruction
-3. WHEN self-destructing THEN the server SHALL detach volumes before terminating itself via Hetzner API
-4. IF network connectivity is restored THEN the client SHALL re-establish the keep-alive connection
-
-### Requirement 4
-
-**User Story:** As a developer, I want to configure server specifications and locations, so that I can optimize performance and costs for my specific use case.
-
-#### Acceptance Criteria
-
-1. WHEN initializing the system THEN the user SHALL be able to specify Hetzner server type, location, and volume size
-2. WHEN configuration changes are made THEN the system SHALL validate the settings against Hetzner API availability
-3. WHEN creating new servers THEN the system SHALL use the configured specifications
-4. IF invalid configuration is provided THEN the system SHALL display clear error messages with valid options
-
-### Requirement 5
-
-**User Story:** As a developer, I want secure SSH-based communication with remote servers, so that my Docker commands and data are protected in transit.
-
-#### Acceptance Criteria
-
-1. WHEN first initializing the system THEN the system SHALL generate SSH key pairs automatically
-2. WHEN provisioning a server THEN the system SHALL upload the public key to Hetzner and configure server access
-3. WHEN communicating with servers THEN all Docker API traffic SHALL be encrypted via SSH tunnels
-4. WHEN SSH keys don't exist THEN the system SHALL regenerate them and update server configurations
-
-### Requirement 6
-
-**User Story:** As a developer, I want persistent storage for my Docker containers, so that my data survives server restarts and reprovisioning.
+**User Story:** As a developer, I want persistent storage for my Docker containers, so that my data survives server reprovisioning.
 
 #### Acceptance Criteria
 
 1. WHEN provisioning a server THEN the system SHALL create and attach a persistent volume
-2. WHEN a server is destroyed THEN the system SHALL preserve the volume for future attachment
-3. WHEN reprovisioning a server THEN the system SHALL reattach existing volumes to maintain data persistence
-4. IF volume attachment fails THEN the system SHALL retry with exponential backoff up to 3 times
+2. WHEN a server is destroyed THEN the system SHALL preserve the volume
+3. WHEN reprovisioning a server THEN the system SHALL reattach the existing volume
+4. WHEN volume operations fail THEN the system SHALL retry with exponential backoff
+5. WHEN volumes are no longer needed THEN the system SHALL provide commands to clean them up
 
-### Requirement 7
+### Requirement 4
 
-**User Story:** As a developer, I want comprehensive logging and monitoring, so that I can troubleshoot issues and monitor system performance.
+**User Story:** As a developer, I want simple configuration and setup, so that I can start using DockBridge quickly.
 
 #### Acceptance Criteria
 
-1. WHEN any system operation occurs THEN the system SHALL log structured messages with timestamps and context
-2. WHEN errors occur THEN the system SHALL log detailed error information including stack traces
-3. WHEN requested THEN the system SHALL provide real-time log streaming via CLI commands
-4. WHEN system health checks run THEN the system SHALL report status of all components
+1. WHEN first running DockBridge THEN the system SHALL guide me through initial configuration
+2. WHEN configuring the system THEN I SHALL only need to provide Hetzner API token and basic preferences
+3. WHEN SSH keys don't exist THEN the system SHALL generate them automatically
+4. WHEN configuration is invalid THEN the system SHALL provide clear error messages with suggestions
+5. WHEN updating configuration THEN changes SHALL take effect without requiring restart
 
-### Requirement 8
+### Requirement 5
 
-**User Story:** As a developer, I want a simple CLI interface for managing the system, so that I can easily configure, monitor, and control DockBridge operations.
+**User Story:** As a developer, I want reliable connection handling, so that temporary network issues don't disrupt my workflow.
+
+#### Acceptance Criteria
+
+1. WHEN network connectivity is lost THEN the system SHALL attempt to reconnect with exponential backoff
+2. WHEN SSH connections fail THEN the system SHALL retry up to 3 times before failing
+3. WHEN Docker commands fail due to connectivity THEN the system SHALL retry transparently
+4. WHEN connectivity is restored THEN the system SHALL resume normal operation automatically
+5. WHEN connection issues persist THEN the system SHALL provide clear status information
+
+### Requirement 6
+
+**User Story:** As a developer, I want comprehensive logging and status information, so that I can troubleshoot issues effectively.
+
+#### Acceptance Criteria
+
+1. WHEN any operation occurs THEN the system SHALL log structured messages with appropriate detail levels
+2. WHEN errors occur THEN the system SHALL log detailed error information with context
+3. WHEN requested THEN the system SHALL provide real-time status of servers, connections, and operations
+4. WHEN debugging THEN the system SHALL support verbose logging modes
+5. WHEN operations complete THEN the system SHALL log timing and resource usage information
+
+### Requirement 7
+
+**User Story:** As a developer, I want a simple CLI interface, so that I can easily control DockBridge operations.
 
 #### Acceptance Criteria
 
 1. WHEN running CLI commands THEN the system SHALL provide clear help text and usage examples
-2. WHEN initializing the system THEN the user SHALL be guided through configuration setup
-3. WHEN viewing system status THEN the CLI SHALL display server status, connection health, and resource usage
-4. IF commands fail THEN the system SHALL provide actionable error messages with suggested solutions
+2. WHEN checking status THEN the CLI SHALL show server state, connection health, and cost information
+3. WHEN managing servers THEN the CLI SHALL provide commands to start, stop, and destroy servers manually
+4. WHEN viewing logs THEN the CLI SHALL support real-time log streaming and filtering
+5. WHEN commands fail THEN the system SHALL provide actionable error messages
+
+### Requirement 8
+
+**User Story:** As a developer, I want the system to be lightweight and fast, so that it doesn't slow down my development workflow.
+
+#### Acceptance Criteria
+
+1. WHEN starting DockBridge THEN it SHALL initialize in under 2 seconds
+2. WHEN forwarding Docker commands THEN latency SHALL be minimal (under 100ms overhead)
+3. WHEN provisioning servers THEN the system SHALL provide progress feedback
+4. WHEN the system is idle THEN it SHALL use minimal local resources
+5. WHEN handling multiple operations THEN performance SHALL remain consistent
 
 ### Requirement 9
 
-**User Story:** As a developer, I want automatic recovery from network failures, so that temporary connectivity issues don't disrupt my development workflow.
+**User Story:** As a developer, I want integration with existing Docker workflows, so that I can use DockBridge with my current tools and scripts.
 
 #### Acceptance Criteria
 
-1. WHEN network connectivity is lost THEN the client SHALL attempt to reconnect with exponential backoff
-2. WHEN reconnection succeeds THEN the system SHALL resume normal operation without user intervention
-3. WHEN Docker commands fail due to network issues THEN the system SHALL retry up to 3 times
-4. IF connectivity cannot be restored within 10 minutes THEN the system SHALL notify the user and enter offline mode
+1. WHEN DockBridge is running THEN all existing Docker commands SHALL work without modification
+2. WHEN using Docker Compose THEN it SHALL work transparently with remote servers
+3. WHEN using Docker build contexts THEN large files SHALL be transferred efficiently
+4. WHEN using interactive Docker commands THEN they SHALL work exactly as locally
+5. WHEN integrating with CI/CD THEN DockBridge SHALL support automated workflows
 
 ### Requirement 10
 
-**User Story:** As a developer, I want simplified code architecture that eliminates complex connection management layers, so that the system is more maintainable and reliable.
+**User Story:** As a developer, I want cost visibility and control, so that I can manage my cloud spending effectively.
 
 #### Acceptance Criteria
 
-1. WHEN refactoring the system THEN the system SHALL eliminate the HTTP proxy layer and use Docker Go client directly
-2. WHEN connecting to remote servers THEN the system SHALL use simple SSH tunneling without complex connection pooling
-3. WHEN handling Docker commands THEN the system SHALL remove unnecessary abstraction layers and request handlers
-4. WHEN debugging issues THEN the system SHALL have clear, simple code paths that are easy to troubleshoot
+1. WHEN servers are running THEN the system SHALL track and display estimated costs
+2. WHEN viewing status THEN the CLI SHALL show current monthly cost estimates
+3. WHEN servers have been running for extended periods THEN the system SHALL warn about costs
+4. WHEN requested THEN the system SHALL provide cost reports and usage statistics
+5. WHEN cost limits are configured THEN the system SHALL enforce them by destroying servers
