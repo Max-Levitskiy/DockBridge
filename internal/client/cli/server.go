@@ -6,7 +6,7 @@ import (
 
 	clientconfig "github.com/dockbridge/dockbridge/internal/client/config"
 	"github.com/dockbridge/dockbridge/internal/client/hetzner"
-	internalconfig "github.com/dockbridge/dockbridge/internal/config"
+
 	"github.com/dockbridge/dockbridge/pkg/errors"
 	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/spf13/cobra"
@@ -24,12 +24,10 @@ var serverCreateCmd = &cobra.Command{
 	Long:  `Initialize and validate server configuration. Servers are automatically provisioned when Docker commands are executed.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config")
-		logConfigPath, _ := cmd.Flags().GetString("log-config")
 
 		// Initialize logger
-		if err := internalconfig.InitLogger(logConfigPath); err != nil {
-			return fmt.Errorf("failed to initialize logger: %w", err)
-		}
+		log := logger.NewDefault()
+		_ = log // Use logger if needed
 
 		return createServer(cmd.Context(), configPath)
 	},
@@ -41,13 +39,11 @@ var serverDestroyCmd = &cobra.Command{
 	Long:  `Destroy all DockBridge servers while preserving volumes for future use.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config")
-		logConfigPath, _ := cmd.Flags().GetString("log-config")
 		force, _ := cmd.Flags().GetBool("force")
 
 		// Initialize logger
-		if err := internalconfig.InitLogger(logConfigPath); err != nil {
-			return fmt.Errorf("failed to initialize logger: %w", err)
-		}
+		log := logger.NewDefault()
+		_ = log // Use logger if needed
 
 		return destroyServer(cmd.Context(), configPath, force)
 	},
@@ -59,12 +55,10 @@ var serverStatusCmd = &cobra.Command{
 	Long:  `Check the status of all DockBridge servers and volumes.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config")
-		logConfigPath, _ := cmd.Flags().GetString("log-config")
 
 		// Initialize logger
-		if err := internalconfig.InitLogger(logConfigPath); err != nil {
-			return fmt.Errorf("failed to initialize logger: %w", err)
-		}
+		log := logger.NewDefault()
+		_ = log // Use logger if needed
 
 		return checkServerStatus(cmd.Context(), configPath)
 	},
