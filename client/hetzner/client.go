@@ -15,6 +15,7 @@ type HetznerClient interface {
 	ProvisionServer(ctx context.Context, config *ServerConfig) (*Server, error)
 	DestroyServer(ctx context.Context, serverID string) error
 	CreateVolume(ctx context.Context, size int, location string) (*Volume, error)
+	FindOrCreateDockerVolume(ctx context.Context, location string) (*Volume, error)
 	AttachVolume(ctx context.Context, serverID, volumeID string) error
 	DetachVolume(ctx context.Context, volumeID string) error
 	ManageSSHKeys(ctx context.Context, publicKey string) (*SSHKey, error)
@@ -214,6 +215,68 @@ func (c *Client) CreateVolume(ctx context.Context, size int, location string) (*
 		Size:     size,
 		Location: loc,
 		Format:   hcloud.Ptr("ext4"),
+	}
+
+	result, _, err := c.hcloud.Volume.Create(ctx, opts)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create volume")
+	}
+
+	// Wait for volume creation to complete
+	_, errCh := c.hcloud.Action.WatchProgress(ctx, result.Action)
+	if err := <-errCh; err != nil {
+		return nil, errors.Wrap(err, "failed to wait for volume creation")
+	}
+
+	return convertVolume(result.Volume), nil
+}
+
+// FindOrCreateDockerVolume finds an existing Docker data volume or creates a new one
+func (c *Client) FindOrCreateDockerVolume(ctx context.Context, location string) (*Volume, error) {
+	// First, try to find an existing Docker data volume
+	volumes, err := c.ListVolumes(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list volumes")
+	}
+
+	// Look for existing Docker data volume in the same location
+	for _, volume := range volumes {
+		if volume.Location == location && strings.Contains(volume.Name, "dockbridge-docker-data") {
+			// Check if volume is available (not attached to another server)
+			if volume.Status == "available" {
+				return volume, nil
+			}
+		}
+	}
+
+	// No available volume found, create a new one with Docker data naming
+	return c.createDockerDataVolume(ctx, location)
+}
+
+// createDockerDataVolume creates a new volume specifically for Docker data
+func (c *Client) createDockerDataVolume(ctx context.Context, location string) (*Volume, error) {
+	// Get location
+	loc, _, err := c.hcloud.Location.GetByName(ctx, location)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get location")
+	}
+	if loc == nil {
+		return nil, fmt.Errorf("location %s not found", location)
+	}
+
+	// Generate unique volume name with Docker data identifier
+	volumeName := fmt.Sprintf("dockbridge-docker-data-%d", time.Now().Unix())
+
+	// Create volume with ext4 filesystem for Docker data
+	opts := hcloud.VolumeCreateOpts{
+		Name:     volumeName,
+		Size:     c.config.VolumeSize,
+		Location: loc,
+		Format:   hcloud.Ptr("ext4"),
+		Labels: map[string]string{
+			"purpose":    "docker-data",
+			"created-by": "dockbridge",
+		},
 	}
 
 	result, _, err := c.hcloud.Volume.Create(ctx, opts)

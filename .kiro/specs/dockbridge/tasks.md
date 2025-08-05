@@ -16,7 +16,7 @@
   - Write unit tests for server management functionality
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 4.2_
 
-- [ ] 2.1 Enhance Volume Management for Docker State Persistence
+- [x] 2.1 Enhance Volume Management for Docker State Persistence
   - Update server provisioning to mount persistent volume at /var/lib/docker
   - Ensure Docker daemon uses the persistent volume for all data storage
   - Add volume formatting and initialization for new volumes
@@ -52,7 +52,7 @@
   - Write unit tests for CLI commands
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 4.1, 4.4_
 
-- [ ] 6. Implement Activity Tracking
+- [x] 6. Implement Activity Tracking
   - Create activity tracking interface for Docker commands and connections
   - Implement activity timestamp recording and retrieval
   - Add configurable idle and connection timeout support

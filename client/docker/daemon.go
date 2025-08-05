@@ -12,8 +12,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dockbridge/dockbridge/client/hetzner"
 	"github.com/dockbridge/dockbridge/client/ssh"
+	"github.com/dockbridge/dockbridge/internal/client/activity"
+	"github.com/dockbridge/dockbridge/internal/client/hetzner"
+	"github.com/dockbridge/dockbridge/internal/client/lifecycle"
+	"github.com/dockbridge/dockbridge/internal/server"
 	"github.com/dockbridge/dockbridge/internal/shared/config"
 	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/pkg/errors"
@@ -21,23 +24,27 @@ import (
 
 // DockBridgeDaemon represents the main DockBridge daemon that forwards Docker socket over SSH
 type DockBridgeDaemon struct {
-	config        *DaemonConfig
-	listener      net.Listener
-	running       bool
-	mu            sync.RWMutex
-	logger        logger.LoggerInterface
-	clientManager DockerClientManager
-	ctx           context.Context
-	cancel        context.CancelFunc
+	config           *DaemonConfig
+	listener         net.Listener
+	running          bool
+	mu               sync.RWMutex
+	logger           logger.LoggerInterface
+	clientManager    DockerClientManager
+	activityTracker  *activity.Tracker
+	lifecycleManager *lifecycle.Manager
+	serverManager    *server.Manager
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
 // DaemonConfig holds configuration for the DockBridge daemon
 type DaemonConfig struct {
-	SocketPath    string
-	HetznerClient hetzner.HetznerClient
-	SSHConfig     *config.SSHConfig
-	HetznerConfig *config.HetznerConfig
-	Logger        logger.LoggerInterface
+	SocketPath     string
+	HetznerClient  hetzner.HetznerClient
+	SSHConfig      *config.SSHConfig
+	HetznerConfig  *config.HetznerConfig
+	ActivityConfig *config.ActivityConfig
+	Logger         logger.LoggerInterface
 }
 
 // NewDockBridgeDaemon creates a new DockBridge daemon
@@ -68,6 +75,24 @@ func (d *DockBridgeDaemon) Start(ctx context.Context, config *DaemonConfig) erro
 	if err := d.initializeComponents(); err != nil {
 		return errors.Wrap(err, "failed to initialize components")
 	}
+
+	// Start activity tracker and lifecycle manager
+	d.logger.Info("Starting activity tracker...")
+	if err := d.activityTracker.Start(d.ctx); err != nil {
+		return errors.Wrap(err, "failed to start activity tracker")
+	}
+	d.logger.Info("Activity tracker started successfully")
+
+	d.logger.WithFields(map[string]interface{}{
+		"idle_timeout":       d.config.ActivityConfig.IdleTimeout,
+		"connection_timeout": d.config.ActivityConfig.ConnectionTimeout,
+		"grace_period":       d.config.ActivityConfig.GracePeriod,
+	}).Info("Starting lifecycle manager with activity-based timeouts...")
+
+	if err := d.lifecycleManager.Start(d.ctx); err != nil {
+		return errors.Wrap(err, "failed to start lifecycle manager")
+	}
+	d.logger.Info("Lifecycle manager started successfully")
 
 	// Set up the Unix socket listener
 	if err := d.setupListener(); err != nil {
@@ -109,6 +134,24 @@ func (d *DockBridgeDaemon) Stop() error {
 		d.listener.Close()
 	}
 
+	// Stop lifecycle manager
+	if d.lifecycleManager != nil {
+		if err := d.lifecycleManager.Stop(); err != nil {
+			d.logger.WithFields(map[string]interface{}{
+				"error": err.Error(),
+			}).Error("Failed to stop lifecycle manager")
+		}
+	}
+
+	// Stop activity tracker
+	if d.activityTracker != nil {
+		if err := d.activityTracker.Stop(); err != nil {
+			d.logger.WithFields(map[string]interface{}{
+				"error": err.Error(),
+			}).Error("Failed to stop activity tracker")
+		}
+	}
+
 	// Close client manager
 	if d.clientManager != nil {
 		if err := d.clientManager.Close(); err != nil {
@@ -140,13 +183,29 @@ func (d *DockBridgeDaemon) IsRunning() bool {
 
 // initializeComponents sets up the internal components
 func (d *DockBridgeDaemon) initializeComponents() error {
-	// Create Docker client manager
-	d.clientManager = NewDockerClientManager(
+	// Create activity tracker
+	d.activityTracker = activity.NewTracker(d.config.ActivityConfig)
+
+	// Create server manager
+	d.serverManager = server.NewManager(d.config.HetznerClient, d.config.HetznerConfig)
+
+	// Create lifecycle manager
+	d.lifecycleManager = lifecycle.NewManager(
+		d.activityTracker,
+		d.serverManager,
+		d.config.ActivityConfig,
+		d.logger,
+	)
+
+	// Create Docker client manager with activity tracking
+	d.clientManager = NewDockerClientManagerWithActivity(
 		d.config.HetznerClient,
 		d.config.SSHConfig,
 		d.config.HetznerConfig,
 		d.logger,
+		d.activityTracker,
 	)
+
 	return nil
 }
 

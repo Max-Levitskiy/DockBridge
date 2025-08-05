@@ -1,0 +1,302 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/dockbridge/dockbridge/internal/client/hetzner"
+	"github.com/dockbridge/dockbridge/internal/shared/config"
+	"github.com/pkg/errors"
+)
+
+// Manager handles server lifecycle operations with enhanced volume management
+type Manager struct {
+	hetznerClient hetzner.HetznerClient
+	config        *config.HetznerConfig
+}
+
+// NewManager creates a new server manager
+func NewManager(hetznerClient hetzner.HetznerClient, config *config.HetznerConfig) *Manager {
+	return &Manager{
+		hetznerClient: hetznerClient,
+		config:        config,
+	}
+}
+
+// ServerInfo represents server information with volume details
+type ServerInfo struct {
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Status    ServerStatus      `json:"status"`
+	IPAddress string            `json:"ip_address"`
+	VolumeID  string            `json:"volume_id"`
+	CreatedAt time.Time         `json:"created_at"`
+	Metadata  map[string]string `json:"metadata"`
+}
+
+// VolumeInfo represents volume information
+type VolumeInfo struct {
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	Size      int          `json:"size"`
+	Status    VolumeStatus `json:"status"`
+	MountPath string       `json:"mount_path"`
+	CreatedAt time.Time    `json:"created_at"`
+}
+
+// ServerStatus represents the status of a server
+type ServerStatus string
+
+const (
+	StatusProvisioning ServerStatus = "provisioning"
+	StatusRunning      ServerStatus = "running"
+	StatusShuttingDown ServerStatus = "shutting_down"
+	StatusTerminated   ServerStatus = "terminated"
+)
+
+// VolumeStatus represents the status of a volume
+type VolumeStatus string
+
+const (
+	VolumeStatusCreating  VolumeStatus = "creating"
+	VolumeStatusAvailable VolumeStatus = "available"
+	VolumeStatusAttached  VolumeStatus = "attached"
+	VolumeStatusDeleting  VolumeStatus = "deleting"
+)
+
+// EnsureServer ensures a server exists with proper volume mounting for Docker state persistence
+func (m *Manager) EnsureServer(ctx context.Context) (*ServerInfo, error) {
+	// First, check if we have an existing server
+	servers, err := m.ListServers(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list existing servers")
+	}
+
+	// Look for a running DockBridge server
+	for _, server := range servers {
+		if server.Status == StatusRunning && server.VolumeID != "" {
+			return server, nil
+		}
+	}
+
+	// No suitable server found, provision a new one
+	return m.provisionServerWithVolume(ctx)
+}
+
+// provisionServerWithVolume provisions a new server with enhanced volume management
+func (m *Manager) provisionServerWithVolume(ctx context.Context) (*ServerInfo, error) {
+	// Step 1: Find or create a Docker data volume
+	volume, err := m.EnsureVolume(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to ensure volume")
+	}
+
+	// Step 2: Generate SSH key (placeholder - should be provided by caller)
+	// For now, we'll assume SSH key management is handled elsewhere
+
+	// Step 3: Generate enhanced cloud-init script for Docker state persistence
+	cloudInitConfig := &hetzner.CloudInitConfig{
+		DockerVersion: "latest",
+		VolumeMount:   "/var/lib/docker", // Mount volume directly at Docker data directory
+		KeepAlivePort: 8080,
+		DockerAPIPort: 2376,
+		// SSHPublicKey will be set by the caller
+	}
+
+	userDataScript := hetzner.GenerateCloudInitScript(cloudInitConfig)
+
+	// Step 4: Provision server with volume attached
+	serverName := fmt.Sprintf("dockbridge-%d", time.Now().Unix())
+	serverConfig := &hetzner.ServerConfig{
+		Name:       serverName,
+		ServerType: m.config.ServerType,
+		Location:   m.config.Location,
+		VolumeID:   volume.ID,
+		UserData:   userDataScript,
+		// SSHKeyID will be set by the caller
+	}
+
+	server, err := m.hetznerClient.ProvisionServer(ctx, serverConfig)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to provision server")
+	}
+
+	// Step 5: Wait for server to be ready with enhanced volume setup
+	err = m.waitForServerReady(ctx, fmt.Sprintf("%d", server.ID), 10*time.Minute)
+	if err != nil {
+		// Cleanup server if it fails to become ready
+		_ = m.hetznerClient.DestroyServer(ctx, fmt.Sprintf("%d", server.ID))
+		return nil, errors.Wrap(err, "server failed to become ready")
+	}
+
+	// Convert VolumeInfo back to hetzner.Volume for the conversion function
+	var hetznerVolume *hetzner.Volume
+	if volume != nil {
+		// Parse the volume ID from string to int64
+		volumeIDInt, err := strconv.ParseInt(volume.ID, 10, 64)
+		if err != nil {
+			volumeIDInt = 0
+		}
+		hetznerVolume = &hetzner.Volume{
+			ID:       volumeIDInt,
+			Name:     volume.Name,
+			Size:     volume.Size,
+			Location: "", // We don't have location in VolumeInfo
+			Status:   string(volume.Status),
+		}
+	}
+
+	return convertToServerInfo(server, hetznerVolume), nil
+}
+
+// EnsureVolume ensures a Docker data volume exists and is available
+func (m *Manager) EnsureVolume(ctx context.Context) (*VolumeInfo, error) {
+	// Try to find an existing Docker data volume
+	volume, err := m.hetznerClient.FindOrCreateDockerVolume(ctx, m.config.Location)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to find or create Docker volume")
+	}
+
+	return convertToVolumeInfo(volume), nil
+}
+
+// DestroyServer destroys a server while preserving the volume for future use
+func (m *Manager) DestroyServer(ctx context.Context, serverID string) error {
+	// Get server details to find associated volume
+	server, err := m.hetznerClient.GetServer(ctx, serverID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get server details")
+	}
+
+	// Detach volume before destroying server (to preserve Docker state)
+	if server.VolumeID != "" {
+		err = m.hetznerClient.DetachVolume(ctx, server.VolumeID)
+		if err != nil {
+			// Log warning but continue with server destruction
+			fmt.Printf("Warning: failed to detach volume %s: %v\n", server.VolumeID, err)
+		}
+	}
+
+	// Destroy the server
+	err = m.hetznerClient.DestroyServer(ctx, serverID)
+	if err != nil {
+		return errors.Wrap(err, "failed to destroy server")
+	}
+
+	return nil
+}
+
+// GetServerStatus retrieves the current status of a server
+func (m *Manager) GetServerStatus(ctx context.Context) (*ServerStatus, error) {
+	servers, err := m.ListServers(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list servers")
+	}
+
+	// Find the most recent DockBridge server
+	var latestServer *ServerInfo
+	for _, server := range servers {
+		if latestServer == nil || server.CreatedAt.After(latestServer.CreatedAt) {
+			latestServer = server
+		}
+	}
+
+	if latestServer == nil {
+		status := StatusTerminated
+		return &status, nil
+	}
+
+	return &latestServer.Status, nil
+}
+
+// ListServers retrieves all DockBridge servers
+func (m *Manager) ListServers(ctx context.Context) ([]*ServerInfo, error) {
+	servers, err := m.hetznerClient.ListServers(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list servers")
+	}
+
+	var dockbridgeServers []*ServerInfo
+	for _, server := range servers {
+		// Filter for DockBridge servers (by name pattern)
+		if isDockBridgeServer(server.Name) {
+			volume, _ := m.hetznerClient.GetVolume(ctx, server.VolumeID)
+			serverInfo := convertToServerInfo(server, volume)
+			dockbridgeServers = append(dockbridgeServers, serverInfo)
+		}
+	}
+
+	return dockbridgeServers, nil
+}
+
+// waitForServerReady waits for a server to be fully ready with enhanced volume setup
+func (m *Manager) waitForServerReady(ctx context.Context, serverID string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.New("timeout waiting for server to be ready")
+		case <-ticker.C:
+			server, err := m.hetznerClient.GetServer(ctx, serverID)
+			if err != nil {
+				continue // Keep trying
+			}
+
+			if server.Status == "running" && server.IPAddress != "" {
+				// Additional wait for cloud-init to complete volume setup
+				fmt.Printf("Server is running, waiting for cloud-init to complete volume setup...\n")
+				time.Sleep(60 * time.Second) // Extended wait for volume operations
+				return nil
+			}
+		}
+	}
+}
+
+// Helper functions
+
+// isDockBridgeServer checks if a server name indicates it's a DockBridge server
+func isDockBridgeServer(name string) bool {
+	return len(name) > 10 && name[:10] == "dockbridge"
+}
+
+// convertToServerInfo converts hetzner.Server to ServerInfo
+func convertToServerInfo(server *hetzner.Server, volume *hetzner.Volume) *ServerInfo {
+	serverInfo := &ServerInfo{
+		ID:        fmt.Sprintf("%d", server.ID),
+		Name:      server.Name,
+		Status:    ServerStatus(server.Status),
+		IPAddress: server.IPAddress,
+		VolumeID:  server.VolumeID,
+		CreatedAt: server.CreatedAt,
+		Metadata:  make(map[string]string),
+	}
+
+	// Add volume information to metadata
+	if volume != nil {
+		serverInfo.Metadata["volume_name"] = volume.Name
+		serverInfo.Metadata["volume_size"] = fmt.Sprintf("%d", volume.Size)
+		serverInfo.Metadata["volume_location"] = volume.Location
+		serverInfo.Metadata["docker_data_dir"] = "/var/lib/docker"
+	}
+
+	return serverInfo
+}
+
+// convertToVolumeInfo converts hetzner.Volume to VolumeInfo
+func convertToVolumeInfo(volume *hetzner.Volume) *VolumeInfo {
+	return &VolumeInfo{
+		ID:        fmt.Sprintf("%d", volume.ID),
+		Name:      volume.Name,
+		Size:      volume.Size,
+		Status:    VolumeStatus(volume.Status),
+		MountPath: "/var/lib/docker", // Docker data directory
+		CreatedAt: time.Now(),        // Hetzner volume doesn't provide creation time
+	}
+}

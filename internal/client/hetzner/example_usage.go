@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/dockbridge/dockbridge/client/hetzner"
 )
 
 // ExampleUsage demonstrates how to use the Hetzner Cloud API client
@@ -89,10 +91,10 @@ func ExampleUsage() {
 func ExampleCloudInitGeneration() {
 	fmt.Println("Generating cloud-init script...")
 
-	config := &CloudInitConfig{
+	config := &hetzner.CloudInitConfig{
 		DockerVersion: "latest",
 		SSHPublicKey:  "ssh-rsa AAAAB3NzaC1yc2E... your-public-key-here",
-		VolumeMount:   "/mnt/docker-data",
+		VolumeMount:   "/var/lib/docker",
 		KeepAlivePort: 8080,
 		DockerAPIPort: 2376,
 		Packages: []string{
@@ -106,7 +108,7 @@ func ExampleCloudInitGeneration() {
 		},
 	}
 
-	script := GenerateCloudInitScript(config)
+	script := hetzner.GenerateCloudInitScript(config)
 	fmt.Println("Generated cloud-init script:")
 	fmt.Println("---")
 	fmt.Println(script)
@@ -151,9 +153,9 @@ func ExampleBasicOperations() {
 	fmt.Printf("SSH key uploaded: %s (ID: %d)\n", sshKey.Name, sshKey.ID)
 
 	// Generate cloud-init script
-	cloudInitConfig := GetDefaultCloudInitConfig()
+	cloudInitConfig := hetzner.GetDefaultCloudInitConfig()
 	cloudInitConfig.SSHPublicKey = "ssh-rsa AAAAB3NzaC1yc2E... your-public-key-here"
-	userDataScript := GenerateCloudInitScript(cloudInitConfig)
+	userDataScript := hetzner.GenerateCloudInitScript(cloudInitConfig)
 
 	// Create server
 	fmt.Println("Creating server...")

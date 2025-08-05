@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dockbridge/dockbridge/client/hetzner"
 	"github.com/pkg/errors"
 )
 
@@ -48,13 +49,13 @@ func (lm *LifecycleManager) ProvisionServerWithVolume(ctx context.Context, confi
 	}
 
 	// Generate cloud-init script
-	cloudInitConfig := &CloudInitConfig{
+	cloudInitConfig := &hetzner.CloudInitConfig{
 		SSHPublicKey:  config.SSHPublicKey,
 		VolumeMount:   config.VolumeMount,
 		KeepAlivePort: config.KeepAlivePort,
 		DockerAPIPort: config.DockerAPIPort,
 	}
-	userDataScript := GenerateCloudInitScript(cloudInitConfig)
+	userDataScript := hetzner.GenerateCloudInitScript(cloudInitConfig)
 
 	// Prepare server configuration
 	serverConfig := &ServerConfig{

@@ -9,8 +9,9 @@ import (
 	"syscall"
 
 	"github.com/dockbridge/dockbridge/client/docker"
-	"github.com/dockbridge/dockbridge/client/hetzner"
 	"github.com/dockbridge/dockbridge/internal/client/config"
+	"github.com/dockbridge/dockbridge/internal/client/hetzner"
+	"github.com/dockbridge/dockbridge/internal/server"
 	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/spf13/cobra"
 )
@@ -77,13 +78,26 @@ func startClient(configPath string) error {
 		return fmt.Errorf("failed to create Hetzner client: %w", err)
 	}
 
+	// Create server manager with enhanced volume management
+	serverManager := server.NewManager(hetznerClient, &cfg.Hetzner)
+
+	// Ensure Docker data volume exists
+	fmt.Println("Ensuring Docker data volume exists...")
+	volume, err := serverManager.EnsureVolume(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to ensure Docker data volume: %w", err)
+	}
+	fmt.Printf("Docker data volume ready: %s (Size: %dGB, Mount: %s)\n",
+		volume.Name, volume.Size, volume.MountPath)
+
 	// Create DockBridge daemon configuration
 	daemonConfig := &docker.DaemonConfig{
-		SocketPath:    cfg.Docker.SocketPath,
-		HetznerClient: hetznerClient,
-		SSHConfig:     &cfg.SSH,
-		HetznerConfig: &cfg.Hetzner,
-		Logger:        log,
+		SocketPath:     cfg.Docker.SocketPath,
+		HetznerClient:  hetznerClient,
+		SSHConfig:      &cfg.SSH,
+		HetznerConfig:  &cfg.Hetzner,
+		ActivityConfig: &cfg.Activity,
+		Logger:         log,
 	}
 
 	// Create and start DockBridge daemon
@@ -91,7 +105,10 @@ func startClient(configPath string) error {
 
 	fmt.Printf("Starting DockBridge daemon on socket: %s\n", cfg.Docker.SocketPath)
 	fmt.Printf("Using Hetzner server type: %s in location: %s\n", cfg.Hetzner.ServerType, cfg.Hetzner.Location)
+	fmt.Printf("Activity-based lifecycle: idle timeout %v, connection timeout %v\n",
+		cfg.Activity.IdleTimeout, cfg.Activity.ConnectionTimeout)
 	fmt.Println("Servers will be provisioned automatically when Docker commands are executed.")
+	fmt.Println("Servers will be automatically destroyed when inactive to save costs.")
 
 	// If using Unix socket, suggest adding user to docker group
 	if strings.HasPrefix(cfg.Docker.SocketPath, "/") {

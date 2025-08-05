@@ -114,7 +114,7 @@ func (m *Manager) setDefaults() {
 	m.viper.SetDefault("docker.socket_path", "/var/run/docker.sock")
 	m.viper.SetDefault("docker.proxy_port", 2376)
 
-	// Activity defaults
+	// Activity defaults - Reasonable production values
 	m.viper.SetDefault("activity.idle_timeout", "5m")
 	m.viper.SetDefault("activity.connection_timeout", "30m")
 	m.viper.SetDefault("activity.grace_period", "30s")
@@ -243,12 +243,12 @@ func (m *Manager) validateDocker() error {
 func (m *Manager) validateActivity() error {
 	activity := &m.config.Activity
 
-	// Validate idle timeout
-	if activity.IdleTimeout < time.Minute {
-		return fmt.Errorf("idle_timeout must be at least 1 minute, got %v", activity.IdleTimeout)
+	// Validate idle timeout - Allow short timeouts for testing but reasonable minimums
+	if activity.IdleTimeout < 30*time.Second {
+		return fmt.Errorf("idle_timeout must be at least 30 seconds, got %v", activity.IdleTimeout)
 	}
 
-	// Validate connection timeout
+	// Validate connection timeout - Allow short timeouts for testing but reasonable minimums
 	if activity.ConnectionTimeout < time.Minute {
 		return fmt.Errorf("connection_timeout must be at least 1 minute, got %v", activity.ConnectionTimeout)
 	}

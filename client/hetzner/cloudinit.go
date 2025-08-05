@@ -28,7 +28,7 @@ func GenerateCloudInitScript(config *CloudInitConfig) string {
 		config.DockerVersion = "latest"
 	}
 	if config.VolumeMount == "" {
-		config.VolumeMount = "/mnt/docker-data"
+		config.VolumeMount = "/var/lib/docker" // Changed to Docker's default data directory
 	}
 	if config.KeepAlivePort == 0 {
 		config.KeepAlivePort = 8080
@@ -103,7 +103,7 @@ runcmd:
   - |
     cat > /etc/docker/daemon.json << 'EOF'
     {
-      "data-root": "` + config.VolumeMount + `/docker",
+      "data-root": "` + config.VolumeMount + `",
       "storage-driver": "overlay2",
       "log-driver": "json-file",
       "log-opts": {
@@ -133,27 +133,50 @@ runcmd:
   # Add ubuntu user to docker group
   - usermod -aG docker ubuntu
   
-  # Configure volume mounting if attached
+  # Configure persistent volume for Docker data
   - |
+    # Wait for volume to be available
+    for i in {1..60}; do
+      if [ -b /dev/sdb ]; then
+        echo "Volume device /dev/sdb is available"
+        break
+      fi
+      echo "Waiting for volume device... attempt $i/60"
+      sleep 5
+    done
+    
     if [ -b /dev/sdb ]; then
+      # Stop Docker before mounting volume
+      systemctl stop docker
+      
       # Format volume if not already formatted
-      if ! blkid /dev/sdb; then
-        mkfs.ext4 /dev/sdb
+      if ! blkid /dev/sdb | grep -q "TYPE="; then
+        echo "Formatting volume with ext4 filesystem"
+        mkfs.ext4 -F /dev/sdb
+      else
+        echo "Volume already has a filesystem"
       fi
       
-      # Mount volume
+      # Get volume UUID for reliable mounting
+      VOLUME_UUID=$(blkid -s UUID -o value /dev/sdb)
+      
+      # Create mount point and mount volume
+      mkdir -p ` + config.VolumeMount + `
       mount /dev/sdb ` + config.VolumeMount + `
       
-      # Add to fstab for persistent mounting
-      echo "/dev/sdb ` + config.VolumeMount + ` ext4 defaults 0 2" >> /etc/fstab
+      # Add to fstab for persistent mounting using UUID
+      echo "UUID=$VOLUME_UUID ` + config.VolumeMount + ` ext4 defaults,nofail 0 2" >> /etc/fstab
       
-      # Create docker directory on volume
-      mkdir -p ` + config.VolumeMount + `/docker
-      chown root:docker ` + config.VolumeMount + `/docker
-      chmod 755 ` + config.VolumeMount + `/docker
+      # Set proper permissions for Docker directory
+      chown root:root ` + config.VolumeMount + `
+      chmod 755 ` + config.VolumeMount + `
       
-      # Restart Docker to use new data directory
-      systemctl restart docker
+      # Restart Docker to use the mounted volume
+      systemctl start docker
+      
+      echo "Docker volume mounted successfully at ` + config.VolumeMount + `"
+    else
+      echo "Warning: No volume device found, Docker will use local storage"
     fi
   
   # Install DockBridge server component (placeholder for future implementation)
@@ -245,7 +268,7 @@ final_message: "DockBridge server setup completed successfully"
 func GetDefaultCloudInitConfig() *CloudInitConfig {
 	return &CloudInitConfig{
 		DockerVersion: "latest",
-		VolumeMount:   "/mnt/docker-data",
+		VolumeMount:   "/var/lib/docker", // Changed to Docker's default data directory
 		KeepAlivePort: 8080,
 		DockerAPIPort: 2376,
 		Packages: []string{

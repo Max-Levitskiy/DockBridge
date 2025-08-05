@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dockbridge/dockbridge/client/hetzner"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -164,39 +165,39 @@ func TestHetznerClientSuite(t *testing.T) {
 
 // Additional unit tests for specific functions
 func TestGenerateCloudInitScript(t *testing.T) {
-	config := &CloudInitConfig{
+	config := &hetzner.CloudInitConfig{
 		DockerVersion: "latest",
 		SSHPublicKey:  "ssh-rsa AAAAB3NzaC1yc2E...",
-		VolumeMount:   "/mnt/docker-data",
+		VolumeMount:   "/var/lib/docker",
 		KeepAlivePort: 8080,
 		DockerAPIPort: 2376,
 	}
 
-	script := GenerateCloudInitScript(config)
+	script := hetzner.GenerateCloudInitScript(config)
 
 	assert.Contains(t, script, "#cloud-config")
 	assert.Contains(t, script, "ssh-rsa AAAAB3NzaC1yc2E...")
-	assert.Contains(t, script, "/mnt/docker-data")
+	assert.Contains(t, script, "/var/lib/docker")
 	assert.Contains(t, script, "docker-ce")
 	assert.Contains(t, script, "2376")
 	assert.Contains(t, script, "8080")
 }
 
 func TestGenerateCloudInitScriptDefaults(t *testing.T) {
-	script := GenerateCloudInitScript(nil)
+	script := hetzner.GenerateCloudInitScript(nil)
 
 	assert.Contains(t, script, "#cloud-config")
-	assert.Contains(t, script, "/mnt/docker-data")
+	assert.Contains(t, script, "/var/lib/docker")
 	assert.Contains(t, script, "docker-ce")
 	assert.Contains(t, script, "2376")
 	assert.Contains(t, script, "8080")
 }
 
-func TestGetDefaultCloudInitConfig(t *testing.T) {
-	config := GetDefaultCloudInitConfig()
+func TestGetDefaultCloudInitConfigInternal(t *testing.T) {
+	config := hetzner.GetDefaultCloudInitConfig()
 
 	assert.Equal(t, "latest", config.DockerVersion)
-	assert.Equal(t, "/mnt/docker-data", config.VolumeMount)
+	assert.Equal(t, "/var/lib/docker", config.VolumeMount)
 	assert.Equal(t, 8080, config.KeepAlivePort)
 	assert.Equal(t, 2376, config.DockerAPIPort)
 	assert.Contains(t, config.Packages, "htop")

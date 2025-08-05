@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dockbridge/dockbridge/client/hetzner"
 	"github.com/dockbridge/dockbridge/client/ssh"
+	"github.com/dockbridge/dockbridge/internal/client/hetzner"
 	"github.com/dockbridge/dockbridge/internal/shared/config"
 	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/docker/docker/client"
@@ -36,10 +36,11 @@ type DockerClientManager interface {
 
 // dockerClientManagerImpl implements DockerClientManager
 type dockerClientManagerImpl struct {
-	hetznerClient hetzner.HetznerClient
-	sshConfig     *config.SSHConfig
-	hetznerConfig *config.HetznerConfig
-	logger        logger.LoggerInterface
+	hetznerClient   hetzner.HetznerClient
+	sshConfig       *config.SSHConfig
+	hetznerConfig   *config.HetznerConfig
+	logger          logger.LoggerInterface
+	activityTracker ActivityTracker // Interface for activity tracking
 
 	// Current connection state
 	currentServer *hetzner.Server
@@ -49,6 +50,12 @@ type dockerClientManagerImpl struct {
 
 	// Synchronization to prevent race conditions
 	mu sync.Mutex
+}
+
+// ActivityTracker interface for recording Docker activity
+type ActivityTracker interface {
+	RecordDockerCommand() error
+	RecordConnectionActivity() error
 }
 
 // NewDockerClientManager creates a new Docker client manager
@@ -61,8 +68,28 @@ func NewDockerClientManager(hetznerClient hetzner.HetznerClient, sshConfig *conf
 	}
 }
 
+// NewDockerClientManagerWithActivity creates a new Docker client manager with activity tracking
+func NewDockerClientManagerWithActivity(hetznerClient hetzner.HetznerClient, sshConfig *config.SSHConfig, hetznerConfig *config.HetznerConfig, logger logger.LoggerInterface, activityTracker ActivityTracker) DockerClientManager {
+	return &dockerClientManagerImpl{
+		hetznerClient:   hetznerClient,
+		sshConfig:       sshConfig,
+		hetznerConfig:   hetznerConfig,
+		logger:          logger,
+		activityTracker: activityTracker,
+	}
+}
+
 // GetClient returns a Docker client connected to the remote server via SSH tunnel
 func (dcm *dockerClientManagerImpl) GetClient(ctx context.Context) (*client.Client, error) {
+	// Record Docker command activity
+	if dcm.activityTracker != nil {
+		if err := dcm.activityTracker.RecordDockerCommand(); err != nil {
+			dcm.logger.WithFields(map[string]interface{}{
+				"error": err.Error(),
+			}).Warn("Failed to record Docker command activity")
+		}
+	}
+
 	// Ensure we have a connection first
 	if err := dcm.EnsureConnection(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to ensure connection")
@@ -90,6 +117,15 @@ func (dcm *dockerClientManagerImpl) GetClient(ctx context.Context) (*client.Clie
 
 // EnsureConnection ensures we have an active connection to a remote server with Docker ready
 func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error {
+	// Record connection activity
+	if dcm.activityTracker != nil {
+		if err := dcm.activityTracker.RecordConnectionActivity(); err != nil {
+			dcm.logger.WithFields(map[string]interface{}{
+				"error": err.Error(),
+			}).Warn("Failed to record connection activity")
+		}
+	}
+
 	// Use mutex to prevent race conditions during server provisioning
 	dcm.mu.Lock()
 	defer dcm.mu.Unlock()
@@ -456,7 +492,7 @@ func (dcm *dockerClientManagerImpl) provisionNewServerWithProgress(ctx context.C
 	return dcm.provisionNewServer(ctx)
 }
 
-// provisionNewServer creates a new Hetzner server with Docker CE
+// provisionNewServer creates a new Hetzner server with Docker CE and persistent volume
 func (dcm *dockerClientManagerImpl) provisionNewServer(ctx context.Context) (*hetzner.Server, error) {
 	// Generate server name with timestamp
 	serverName := fmt.Sprintf("dockbridge-%d", time.Now().Unix())
@@ -472,76 +508,29 @@ func (dcm *dockerClientManagerImpl) provisionNewServer(ctx context.Context) (*he
 
 	publicKeyContent := string(publicKeyBytes)
 
-	// Create cloud-init script for Docker CE installation
-	cloudInitScript := fmt.Sprintf(`#!/bin/bash
-set -e
+	// Find or create persistent volume for Docker data
+	dcm.logger.Info("🗄️ Setting up persistent volume for Docker data...")
+	volume, err := dcm.hetznerClient.FindOrCreateDockerVolume(ctx, dcm.hetznerConfig.Location)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create or find Docker volume")
+	}
 
-# Log all output
-exec > >(tee -a /var/log/dockbridge-setup.log)
-exec 2>&1
+	dcm.logger.WithFields(map[string]interface{}{
+		"volume_id":       volume.ID,
+		"volume_name":     volume.Name,
+		"volume_size":     volume.Size,
+		"volume_location": volume.Location,
+		"volume_status":   volume.Status,
+	}).Info("Docker volume ready for attachment")
 
-echo "$(date): Starting DockBridge server setup"
-
-# Update system
-echo "$(date): Updating system packages"
-apt-get update
-apt-get upgrade -y
-
-# Add SSH public key to root user
-echo "$(date): Setting up SSH access"
-mkdir -p /root/.ssh
-echo "%s" >> /root/.ssh/authorized_keys
-chmod 600 /root/.ssh/authorized_keys
-chmod 700 /root/.ssh
-
-# Install Docker CE
-echo "$(date): Installing Docker CE"
-curl -fsSL https://get.docker.com -o get-docker.sh
-sh get-docker.sh
-
-# Enable Docker service
-echo "$(date): Enabling Docker service"
-systemctl enable docker
-systemctl start docker
-
-# Wait for Docker to be ready
-echo "$(date): Waiting for Docker daemon to be ready"
-for i in {1..30}; do
-    if docker version >/dev/null 2>&1; then
-        echo "$(date): Docker daemon is ready"
-        break
-    fi
-    echo "$(date): Waiting for Docker daemon... attempt $i/30"
-    sleep 2
-done
-
-# Configure Docker daemon to listen on TCP port 2376
-echo "$(date): Configuring Docker daemon for TCP access"
-mkdir -p /etc/systemd/system/docker.service.d
-cat > /etc/systemd/system/docker.service.d/override.conf << EOF
-[Service]
-ExecStart=
-ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2376
-EOF
-
-# Reload systemd and restart Docker
-echo "$(date): Restarting Docker with new configuration"
-systemctl daemon-reload
-systemctl restart docker
-
-# Wait for Docker to be ready again
-echo "$(date): Waiting for Docker daemon to be ready after restart"
-for i in {1..30}; do
-    if docker version >/dev/null 2>&1; then
-        echo "$(date): Docker daemon is ready after restart"
-        break
-    fi
-    echo "$(date): Waiting for Docker daemon after restart... attempt $i/30"
-    sleep 2
-done
-
-echo "$(date): DockBridge server setup completed successfully"
-`, publicKeyContent)
+	// Generate cloud-init script with persistent volume mounting
+	cloudInitConfig := &hetzner.CloudInitConfig{
+		SSHPublicKey:  publicKeyContent,
+		VolumeMount:   "/var/lib/docker", // Mount volume directly at Docker data directory
+		DockerAPIPort: 2376,
+		KeepAlivePort: 8080,
+	}
+	cloudInitScript := hetzner.GenerateCloudInitScript(cloudInitConfig)
 
 	// Upload SSH key to Hetzner
 	sshKey, err := dcm.hetznerClient.ManageSSHKeys(ctx, publicKeyContent)
@@ -549,13 +538,21 @@ echo "$(date): DockBridge server setup completed successfully"
 		return nil, errors.Wrap(err, "failed to manage SSH key with Hetzner")
 	}
 
+	volumeIDStr := fmt.Sprintf("%d", volume.ID)
 	serverConfig := &hetzner.ServerConfig{
 		Name:       serverName,
 		ServerType: dcm.hetznerConfig.ServerType,
 		Location:   dcm.hetznerConfig.Location,
 		UserData:   cloudInitScript,
 		SSHKeyID:   sshKey.ID,
+		VolumeID:   volumeIDStr,
 	}
+
+	dcm.logger.WithFields(map[string]interface{}{
+		"server_name": serverName,
+		"volume_id":   volumeIDStr,
+		"ssh_key_id":  sshKey.ID,
+	}).Info("Creating server with volume attachment")
 
 	server, err := dcm.hetznerClient.ProvisionServer(ctx, serverConfig)
 	if err != nil {
@@ -567,6 +564,13 @@ echo "$(date): DockBridge server setup completed successfully"
 		"server_name": server.Name,
 		"server_ip":   server.IPAddress,
 	}).Info("New server provisioned successfully")
+
+	// Volume should already be attached during server creation via VolumeID in ServerConfig
+	// No need for explicit attachment if it was specified during creation
+	dcm.logger.WithFields(map[string]interface{}{
+		"server_id": server.ID,
+		"volume_id": volume.ID,
+	}).Info("Docker volume should be attached via server creation")
 
 	// Wait for server to be ready
 	if err := dcm.waitForServerReady(ctx, server); err != nil {
