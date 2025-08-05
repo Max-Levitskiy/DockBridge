@@ -16,10 +16,11 @@ graph TB
     subgraph "Local Laptop"
         DC[Docker Client] --> SDP[SSH Docker Proxy]
         CLI[CLI Interface] --> SM[Server Manager]
-        LD[Lock Detector] --> LM[Lifecycle Manager]
+        AT[Activity Tracker] --> LM[Lifecycle Manager]
         KAC[Keep-Alive Client] --> LM
         SM --> HC[Hetzner Client]
         LM --> SM
+        SDP --> AT
     end
     
     subgraph "Hetzner Cloud"
@@ -31,6 +32,8 @@ graph TB
     end
     
     subgraph "Remote Server"
+        DD --> PV
+        PV --> DOCKER_DATA[/var/lib/docker]
         DD --> KAM[Keep-Alive Monitor Script]
         KAM --> SD[Self-Destruct]
     end
@@ -50,15 +53,18 @@ sequenceDiagram
     U->>CLI: dockbridge start
     CLI->>SM: Initialize server manager
     CLI->>SDP: Start proxy (lazy connection)
+    CLI->>AT: Start activity tracker
     
     U->>SDP: docker run hello-world
+    SDP->>AT: Record Docker activity
     SDP->>SM: Connection failed - need server
-    SM->>HC: Provision server
-    HC->>HC: Create server + volume
+    SM->>HC: Provision server + volume
+    HC->>HC: Create server, volume, mount at /var/lib/docker
     SM->>SDP: Server ready, retry connection
     SDP->>DD: Forward Docker command
     DD->>SDP: Stream response
     SDP->>U: Display output
+    AT->>LM: Check activity timers
 ```
 
 ## Components and Interfaces
@@ -71,15 +77,18 @@ type ServerManager interface {
     DestroyServer(ctx context.Context, serverID string) error
     GetServerStatus(ctx context.Context) (*ServerStatus, error)
     ListServers(ctx context.Context) ([]*ServerInfo, error)
+    EnsureVolume(ctx context.Context) (*VolumeInfo, error)
 }
 ```
 
 **Responsibilities:**
 - Manages server lifecycle (provision, destroy, status)
 - Integrates with Hetzner API for server operations
-- Handles volume creation and attachment
+- Handles persistent volume creation, attachment, and mounting at `/var/lib/docker`
+- Configures cloud-init scripts for Docker data directory setup
 - Manages SSH key deployment
 - Provides server information to other components
+- Ensures Docker state persistence across server recreations
 
 ### 2. Proxy Manager (`internal/proxy/`)
 **Interface:**
@@ -89,6 +98,7 @@ type ProxyManager interface {
     Stop() error
     IsRunning() bool
     GetStatus() *ProxyStatus
+    RegisterActivityCallback(callback ActivityCallback) error
 }
 ```
 
@@ -96,8 +106,10 @@ type ProxyManager interface {
 - Wraps ssh-docker-proxy library
 - Handles lazy connection establishment
 - Triggers server provisioning when connections fail
+- Records Docker command activity for lifecycle management
 - Manages proxy lifecycle and configuration
 - Provides connection status information
+- Notifies activity tracker of Docker command execution
 
 ### 3. Lifecycle Manager (`internal/lifecycle/`)
 **Interface:**
@@ -105,36 +117,43 @@ type ProxyManager interface {
 type LifecycleManager interface {
     Start(ctx context.Context) error
     Stop() error
-    RegisterLockHandler(handler LockHandler)
+    RegisterActivityHandler(handler ActivityHandler)
     RegisterIdleHandler(handler IdleHandler)
+    RecordDockerActivity() error
+    RecordConnectionActivity() error
 }
 ```
 
 **Responsibilities:**
-- Monitors laptop lock/unlock events
-- Tracks Docker command activity
-- Manages server shutdown timers
+- Tracks Docker command activity and connection usage
+- Manages configurable idle and connection timeout timers
+- Manages server shutdown timers based on activity
 - Coordinates with server manager for cleanup
-- Handles keep-alive client operations
+- Handles activity-based server lifecycle decisions
 
-### 4. Lock Detector (`internal/lockdetection/`)
+### 4. Activity Tracker (`internal/activity/`)
 **Interface:**
 ```go
-type LockDetector interface {
-    Start(ctx context.Context) (<-chan LockEvent, error)
+type ActivityTracker interface {
+    Start(ctx context.Context) error
     Stop() error
+    RecordDockerCommand() error
+    RecordConnectionActivity() error
+    GetLastActivity() time.Time
+    GetLastConnection() time.Time
 }
 
-type LockEvent struct {
-    Type      LockEventType // Locked, Unlocked
+type ActivityEvent struct {
+    Type      ActivityType // DockerCommand, ConnectionActivity
     Timestamp time.Time
 }
 ```
 
-**Platform-specific implementations:**
-- **Linux**: D-Bus monitoring for screensaver events
-- **macOS**: Core Graphics session state monitoring  
-- **Windows**: Win32 API desktop switching detection
+**Responsibilities:**
+- Tracks Docker command execution timestamps
+- Monitors active Docker connections
+- Provides activity information for lifecycle decisions
+- Manages configurable timeout values
 
 ### 5. Keep-Alive Client (`internal/keepalive/`)
 **Interface:**
@@ -159,6 +178,7 @@ type KeepAliveClient interface {
 type Config struct {
     Hetzner    HetznerConfig    `yaml:"hetzner"`
     Docker     DockerConfig     `yaml:"docker"`
+    Activity   ActivityConfig   `yaml:"activity"`
     KeepAlive  KeepAliveConfig  `yaml:"keepalive"`
     SSH        SSHConfig        `yaml:"ssh"`
     Logging    LoggingConfig    `yaml:"logging"`
@@ -174,6 +194,12 @@ type HetznerConfig struct {
 type DockerConfig struct {
     SocketPath string `yaml:"socket_path" default:"/tmp/dockbridge.sock"`
 }
+
+type ActivityConfig struct {
+    IdleTimeout       time.Duration `yaml:"idle_timeout" default:"5m"`
+    ConnectionTimeout time.Duration `yaml:"connection_timeout" default:"30m"`
+    GracePeriod       time.Duration `yaml:"grace_period" default:"30s"`
+}
 ```
 
 ### Server State Models
@@ -188,12 +214,29 @@ type ServerInfo struct {
     Metadata    map[string]string `json:"metadata"`
 }
 
+type VolumeInfo struct {
+    ID         string       `json:"id"`
+    Name       string       `json:"name"`
+    Size       int          `json:"size"`
+    Status     VolumeStatus `json:"status"`
+    MountPath  string       `json:"mount_path"`
+    CreatedAt  time.Time    `json:"created_at"`
+}
+
 type ServerStatus string
 const (
     StatusProvisioning ServerStatus = "provisioning"
     StatusRunning      ServerStatus = "running"
     StatusShuttingDown ServerStatus = "shutting_down"
     StatusTerminated   ServerStatus = "terminated"
+)
+
+type VolumeStatus string
+const (
+    VolumeStatusCreating  VolumeStatus = "creating"
+    VolumeStatusAvailable VolumeStatus = "available"
+    VolumeStatusAttached  VolumeStatus = "attached"
+    VolumeStatusDeleting  VolumeStatus = "deleting"
 )
 ```
 
@@ -207,6 +250,20 @@ type ProxyStatus struct {
     LastActivity  time.Time `json:"last_activity"`
     BytesTransferred int64  `json:"bytes_transferred"`
 }
+```
+
+### Activity Tracking Models
+```go
+type ActivityStatus struct {
+    LastDockerCommand    time.Time     `json:"last_docker_command"`
+    LastConnection       time.Time     `json:"last_connection"`
+    IdleTimeout          time.Duration `json:"idle_timeout"`
+    ConnectionTimeout    time.Duration `json:"connection_timeout"`
+    TimeUntilShutdown    time.Duration `json:"time_until_shutdown"`
+    ShutdownReason       string        `json:"shutdown_reason"`
+}
+
+type ActivityCallback func(event ActivityEvent) error
 ```
 
 ## Error Handling

@@ -24,23 +24,24 @@ DockBridge is a simplified Go-based system that enables seamless Docker developm
 
 #### Acceptance Criteria
 
-1. WHEN my laptop screen is locked THEN the system SHALL detect the lock within 30 seconds
-2. WHEN a screen lock is detected THEN the system SHALL initiate server shutdown after a 5-minute grace period
+1. WHEN no Docker commands are executed for the configured idle timeout (default 5 minutes) THEN the system SHALL initiate server shutdown
+2. WHEN Docker connections are active but no commands are sent for the configured connection timeout (default 30 minutes) THEN the system SHALL automatically destroy the server
 3. WHEN shutting down servers THEN the system SHALL preserve persistent volumes for future use
-4. WHEN the laptop is unlocked within the grace period THEN the system SHALL cancel the shutdown
-5. WHEN no Docker commands are run for 30 minutes THEN the system SHALL automatically destroy the server
+4. WHEN new Docker activity is detected during shutdown grace period THEN the system SHALL cancel the shutdown
+5. WHEN idle and connection timeouts are configured THEN the system SHALL use the specified values instead of defaults
 
 ### Requirement 3
 
-**User Story:** As a developer, I want persistent storage for my Docker containers, so that my data survives server reprovisioning.
+**User Story:** As a developer, I want persistent storage for my Docker containers, so that my data survives server reprovisioning and preserves all Docker state.
 
 #### Acceptance Criteria
 
-1. WHEN provisioning a server THEN the system SHALL create and attach a persistent volume
-2. WHEN a server is destroyed THEN the system SHALL preserve the volume
-3. WHEN reprovisioning a server THEN the system SHALL reattach the existing volume
+1. WHEN provisioning a server THEN the system SHALL create and attach a persistent volume to store Docker data
+2. WHEN a server is destroyed THEN the system SHALL preserve the volume containing all Docker containers, images, and volumes
+3. WHEN reprovisioning a server THEN the system SHALL reattach the existing volume and restore complete Docker state
 4. WHEN volume operations fail THEN the system SHALL retry with exponential backoff
 5. WHEN volumes are no longer needed THEN the system SHALL provide commands to clean them up
+6. WHEN the volume is attached THEN Docker daemon SHALL use it as the primary data directory (/var/lib/docker)
 
 ### Requirement 4
 
@@ -115,6 +116,18 @@ DockBridge is a simplified Go-based system that enables seamless Docker developm
 5. WHEN integrating with CI/CD THEN DockBridge SHALL support automated workflows
 
 ### Requirement 10
+
+**User Story:** As a developer, I want configurable activity timeouts, so that I can control when servers are automatically destroyed based on my usage patterns.
+
+#### Acceptance Criteria
+
+1. WHEN configuring the system THEN I SHALL be able to set custom idle timeout values (default 5 minutes)
+2. WHEN configuring the system THEN I SHALL be able to set custom connection timeout values (default 30 minutes)
+3. WHEN activity timeouts are configured THEN the system SHALL use these values for server lifecycle decisions
+4. WHEN Docker commands are executed THEN the system SHALL reset the idle timer
+5. WHEN Docker connections are established THEN the system SHALL reset the connection timer
+
+### Requirement 11
 
 **User Story:** As a developer, I want cost visibility and control, so that I can manage my cloud spending effectively.
 

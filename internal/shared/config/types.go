@@ -6,6 +6,7 @@ import "time"
 type ClientConfig struct {
 	Hetzner   HetznerConfig   `yaml:"hetzner" mapstructure:"hetzner"`
 	Docker    DockerConfig    `yaml:"docker" mapstructure:"docker"`
+	Activity  ActivityConfig  `yaml:"activity" mapstructure:"activity"`
 	KeepAlive KeepAliveConfig `yaml:"keepalive" mapstructure:"keepalive"`
 	SSH       SSHConfig       `yaml:"ssh" mapstructure:"ssh"`
 	Logging   LoggingConfig   `yaml:"logging" mapstructure:"logging"`
@@ -46,6 +47,13 @@ type SSHConfig struct {
 	Port      int           `yaml:"port" mapstructure:"port" default:"22"`
 	Timeout   time.Duration `yaml:"timeout" mapstructure:"timeout" default:"30s"`
 	KeepAlive time.Duration `yaml:"keep_alive" mapstructure:"keep_alive" default:"30s"`
+}
+
+// ActivityConfig contains activity tracking and timeout configuration
+type ActivityConfig struct {
+	IdleTimeout       time.Duration `yaml:"idle_timeout" mapstructure:"idle_timeout" default:"5m"`
+	ConnectionTimeout time.Duration `yaml:"connection_timeout" mapstructure:"connection_timeout" default:"30m"`
+	GracePeriod       time.Duration `yaml:"grace_period" mapstructure:"grace_period" default:"30s"`
 }
 
 // LoggingConfig contains logging configuration

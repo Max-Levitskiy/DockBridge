@@ -16,6 +16,15 @@
   - Write unit tests for server management functionality
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 4.2_
 
+- [ ] 2.1 Enhance Volume Management for Docker State Persistence
+  - Update server provisioning to mount persistent volume at /var/lib/docker
+  - Ensure Docker daemon uses the persistent volume for all data storage
+  - Add volume formatting and initialization for new volumes
+  - Implement volume reattachment logic for server reprovisioning
+  - Add cloud-init script to properly mount and configure Docker data directory
+  - Write integration tests for Docker state persistence across server recreations
+  - _Requirements: 3.1, 3.2, 3.3, 3.6_
+
 - [x] 3. Implement Proxy Manager
   - Create ProxyManager that wraps ssh-docker-proxy library
   - Add lazy connection establishment with server provisioning hooks
@@ -43,32 +52,32 @@
   - Write unit tests for CLI commands
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 4.1, 4.4_
 
-- [ ] 6. Implement Lock Detection
-  - Create cross-platform lock detection interface
-  - Implement macOS lock detection using Core Graphics
-  - Implement Linux lock detection using D-Bus
-  - Implement Windows lock detection using Win32 API
-  - Add lock event handling and server shutdown coordination
-  - Write unit tests for lock detection functionality
-  - _Requirements: 2.1, 2.2, 2.4_
+- [ ] 6. Implement Activity Tracking
+  - Create activity tracking interface for Docker commands and connections
+  - Implement activity timestamp recording and retrieval
+  - Add configurable idle and connection timeout support
+  - Integrate activity tracking with proxy manager for command detection
+  - Add activity-based server shutdown coordination
+  - Write unit tests for activity tracking functionality
+  - _Requirements: 2.1, 2.2, 2.4, 10.1, 10.2, 10.4, 10.5_
 
 - [ ] 7. Implement Keep-Alive System
   - Create keep-alive client for sending periodic heartbeats
   - Implement simple server-side keep-alive monitoring script
-  - Add keep-alive coordination with lock detection
+  - Add keep-alive coordination with activity tracking
   - Implement server self-destruction on keep-alive timeout
   - Add network failure recovery and exponential backoff
   - Write unit tests for keep-alive functionality
   - _Requirements: 2.3, 2.5, 3.4, 5.4_
 
 - [ ] 8. Implement Lifecycle Manager
-  - Create LifecycleManager to coordinate lock detection and keep-alive
-  - Add server shutdown timers and grace period handling
-  - Implement idle timeout detection (30 minutes)
+  - Create LifecycleManager to coordinate activity tracking and keep-alive
+  - Add server shutdown timers based on configurable idle and connection timeouts
+  - Implement activity-based timeout detection with grace period handling
   - Add lifecycle event logging and monitoring
-  - Create integration between all lifecycle components
+  - Create integration between activity tracking and server management
   - Write unit tests for lifecycle management
-  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 10.3_
 
 - [ ] 9. Add comprehensive logging and monitoring
   - Implement structured logging with configurable levels
@@ -77,7 +86,7 @@
   - Add performance metrics and timing information
   - Implement log streaming and filtering capabilities
   - Write unit tests for logging and monitoring
-  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 10.1, 10.2_
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 11.1, 11.2_
 
 - [ ] 10. Implement error handling and recovery
   - Add categorized error handling with retry strategies
@@ -104,7 +113,7 @@
   - Add configurable cost limits with automatic enforcement
   - Create cost optimization recommendations
   - Write unit tests for cost management functionality
-  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+  - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
 - [ ] 13. Add performance optimizations
   - Implement fast startup (under 2 seconds)

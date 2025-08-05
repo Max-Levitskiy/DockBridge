@@ -114,6 +114,11 @@ func (m *Manager) setDefaults() {
 	m.viper.SetDefault("docker.socket_path", "/var/run/docker.sock")
 	m.viper.SetDefault("docker.proxy_port", 2376)
 
+	// Activity defaults
+	m.viper.SetDefault("activity.idle_timeout", "5m")
+	m.viper.SetDefault("activity.connection_timeout", "30m")
+	m.viper.SetDefault("activity.grace_period", "30s")
+
 	// Keep-alive defaults
 	m.viper.SetDefault("keepalive.interval", "30s")
 	m.viper.SetDefault("keepalive.timeout", "5m")
@@ -146,6 +151,11 @@ func (m *Manager) validate() error {
 	// Validate Docker configuration
 	if err := m.validateDocker(); err != nil {
 		errors = append(errors, fmt.Sprintf("docker: %v", err))
+	}
+
+	// Validate Activity configuration
+	if err := m.validateActivity(); err != nil {
+		errors = append(errors, fmt.Sprintf("activity: %v", err))
 	}
 
 	// Validate Keep-alive configuration
@@ -224,6 +234,33 @@ func (m *Manager) validateDocker() error {
 	// Validate proxy port
 	if docker.ProxyPort < 1024 || docker.ProxyPort > 65535 {
 		return fmt.Errorf("proxy_port must be between 1024 and 65535, got %d", docker.ProxyPort)
+	}
+
+	return nil
+}
+
+// validateActivity validates activity tracking configuration
+func (m *Manager) validateActivity() error {
+	activity := &m.config.Activity
+
+	// Validate idle timeout
+	if activity.IdleTimeout < time.Minute {
+		return fmt.Errorf("idle_timeout must be at least 1 minute, got %v", activity.IdleTimeout)
+	}
+
+	// Validate connection timeout
+	if activity.ConnectionTimeout < time.Minute {
+		return fmt.Errorf("connection_timeout must be at least 1 minute, got %v", activity.ConnectionTimeout)
+	}
+
+	// Validate grace period
+	if activity.GracePeriod < time.Second {
+		return fmt.Errorf("grace_period must be at least 1 second, got %v", activity.GracePeriod)
+	}
+
+	// Ensure connection timeout is longer than idle timeout
+	if activity.ConnectionTimeout <= activity.IdleTimeout {
+		return fmt.Errorf("connection_timeout (%v) must be greater than idle_timeout (%v)", activity.ConnectionTimeout, activity.IdleTimeout)
 	}
 
 	return nil
