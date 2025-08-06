@@ -137,6 +137,11 @@ func (m *Manager) setDefaults() {
 	m.viper.SetDefault("logging.level", "info")
 	m.viper.SetDefault("logging.format", "json")
 	m.viper.SetDefault("logging.output", "stdout")
+
+	// Port forwarding defaults
+	m.viper.SetDefault("port_forward.enabled", true)
+	m.viper.SetDefault("port_forward.conflict_strategy", "increment")
+	m.viper.SetDefault("port_forward.monitor_interval", "30s")
 }
 
 // validate performs comprehensive configuration validation
@@ -171,6 +176,11 @@ func (m *Manager) validate() error {
 	// Validate Logging configuration
 	if err := m.validateLogging(); err != nil {
 		errors = append(errors, fmt.Sprintf("logging: %v", err))
+	}
+
+	// Validate Port forwarding configuration
+	if err := m.validatePortForward(); err != nil {
+		errors = append(errors, fmt.Sprintf("port_forward: %v", err))
 	}
 
 	if len(errors) > 0 {
@@ -338,6 +348,24 @@ func (m *Manager) validateLogging() error {
 	validOutputs := []string{"stdout", "stderr"}
 	if !contains(validOutputs, strings.ToLower(logging.Output)) && !strings.HasPrefix(logging.Output, "/") {
 		return fmt.Errorf("invalid output '%s', must be 'stdout', 'stderr', or a file path", logging.Output)
+	}
+
+	return nil
+}
+
+// validatePortForward validates port forwarding configuration
+func (m *Manager) validatePortForward() error {
+	portForward := &m.config.PortForward
+
+	// Validate conflict strategy
+	validStrategies := []string{"increment", "fail"}
+	if !contains(validStrategies, string(portForward.ConflictStrategy)) {
+		return fmt.Errorf("invalid conflict_strategy '%s', must be one of: %s", portForward.ConflictStrategy, strings.Join(validStrategies, ", "))
+	}
+
+	// Validate monitor interval
+	if portForward.MonitorInterval < time.Second {
+		return fmt.Errorf("monitor_interval must be at least 1 second, got %v", portForward.MonitorInterval)
 	}
 
 	return nil

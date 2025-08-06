@@ -33,10 +33,11 @@ type Client struct {
 
 // Config holds the Hetzner client configuration
 type Config struct {
-	APIToken   string
-	ServerType string
-	Location   string
-	VolumeSize int
+	APIToken        string
+	ServerType      string
+	Location        string
+	VolumeSize      int
+	PreferredImages []string
 }
 
 // NewClient creates a new Hetzner client instance
@@ -61,6 +62,7 @@ type ServerConfig struct {
 	SSHKeyID   int64
 	VolumeID   string
 	UserData   string
+	ImageName  string // Added to track which image is being used
 }
 
 // Server represents a Hetzner Cloud server
@@ -110,13 +112,44 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 		return nil, fmt.Errorf("location %s not found", config.Location)
 	}
 
-	// Get image (Ubuntu 22.04)
-	image, _, err := c.hcloud.Image.GetByName(ctx, "ubuntu-22.04")
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get Ubuntu image")
+	// Get image based on preference order (configurable with fallback)
+	var image *hcloud.Image
+	var imageName string
+
+	// Use configured preferred images or default fallback
+	preferredImages := c.config.PreferredImages
+	if len(preferredImages) == 0 {
+		preferredImages = []string{"docker-ce", "ubuntu-22.04"}
+		fmt.Printf("No preferred images configured, using defaults: %v\n", preferredImages)
+	} else {
+		fmt.Printf("Using configured preferred images: %v\n", preferredImages)
 	}
+
+	// Try each preferred image in order
+	for _, preferredImage := range preferredImages {
+		fmt.Printf("Trying to get Hetzner image: %s\n", preferredImage)
+		image, _, err = c.hcloud.Image.GetByNameAndArchitecture(ctx, preferredImage, hcloud.ArchitectureX86)
+		if err == nil && image != nil {
+			imageName = preferredImage
+			fmt.Printf("✓ Successfully selected Hetzner image: %s (ID: %d)\n", imageName, image.ID)
+			break
+		}
+		fmt.Printf("✗ Image %s not available, trying next option\n", preferredImage)
+	}
+
+	// If no preferred image was found, return error
 	if image == nil {
-		return nil, errors.New("Ubuntu 22.04 image not found")
+		return nil, errors.New("no suitable server image found from preferred list")
+	}
+
+	// Store the image name in config for cloud-init optimization
+	config.ImageName = imageName
+
+	// Generate optimized cloud-init script based on selected image
+	if config.UserData == "" {
+		// Generate default cloud-init configuration optimized for the selected image
+		cloudInitConfig := GetDefaultCloudInitConfig()
+		config.UserData = GenerateCloudInitForImage(cloudInitConfig, imageName)
 	}
 
 	// Prepare server creation options
@@ -127,10 +160,8 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 		Location:   location,
 	}
 
-	// Add UserData if provided
-	if config.UserData != "" {
-		opts.UserData = config.UserData
-	}
+	// Add UserData (now guaranteed to be set)
+	opts.UserData = config.UserData
 
 	// Add SSH key if provided
 	if config.SSHKeyID > 0 {
@@ -156,8 +187,7 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 	}
 
 	// Wait for server to be running
-	_, errCh := c.hcloud.Action.WatchProgress(ctx, result.Action)
-	if err := <-errCh; err != nil {
+	if err := c.hcloud.Action.WaitFor(ctx, result.Action); err != nil {
 		return nil, errors.Wrap(err, "failed to wait for server creation")
 	}
 
@@ -232,8 +262,7 @@ func (c *Client) CreateVolume(ctx context.Context, size int, location string) (*
 	}
 
 	// Wait for volume creation to complete
-	_, errCh := c.hcloud.Action.WatchProgress(ctx, result.Action)
-	if err := <-errCh; err != nil {
+	if err := c.hcloud.Action.WaitFor(ctx, result.Action); err != nil {
 		return nil, errors.Wrap(err, "failed to wait for volume creation")
 	}
 

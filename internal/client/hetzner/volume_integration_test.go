@@ -68,19 +68,12 @@ func TestDockerStatePersistence(t *testing.T) {
 	t.Run("CloudInitScriptGeneration", func(t *testing.T) {
 		publicKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... test@example.com"
 
-		config := &Config{
-			APIToken:   "dummy",
-			ServerType: "cpx11",
-			Location:   "fsn1",
-			VolumeSize: 10,
-		}
-
-		cloudInitConfig := &hetzner.CloudInitConfig{
+		cloudInitConfig := &CloudInitConfig{
 			SSHPublicKey: publicKey,
 			VolumeMount:  "/var/lib/docker",
 		}
 
-		script := hetzner.GenerateCloudInitScript(cloudInitConfig)
+		script := GenerateCloudInitScript(cloudInitConfig)
 
 		// Verify script contains essential components
 		assert.Contains(t, script, "#cloud-config")

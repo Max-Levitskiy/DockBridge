@@ -15,6 +15,13 @@ hetzner:
   
   # Volume size in GB (minimum 10, maximum 10000)
   volume_size: 10
+  
+  # Preferred images in order of preference (first available will be used)
+  # docker-ce: Docker pre-installed image (faster startup, ~2-3 minutes)
+  # ubuntu-22.04: Standard Ubuntu image with Docker installation (~5-7 minutes)
+  preferred_images:
+    - "docker-ce"
+    - "ubuntu-22.04"
 
 # Docker configuration
 docker:
@@ -37,6 +44,17 @@ keepalive:
   
   # Maximum number of retry attempts
   max_retries: 3
+
+# Activity tracking and timeout configuration
+activity:
+  # Idle timeout - server destroyed after this period of no Docker commands
+  idle_timeout: "5m"
+  
+  # Connection timeout - server destroyed after this period of no active connections
+  connection_timeout: "30m"
+  
+  # Grace period before server destruction (allows cancellation)
+  grace_period: "30s"
 
 # SSH configuration
 ssh:
@@ -62,3 +80,16 @@ logging:
   
   # Log output: stdout, stderr, or file path
   output: "stdout"
+
+# Port forwarding configuration
+port_forward:
+  # Enable automatic port forwarding for Docker containers
+  enabled: true
+  
+  # Strategy for handling port conflicts: increment, fail
+  # increment: Try same port, then increment (80 -> 8080 -> 8081)
+  # fail: Return Docker-compatible error if port unavailable
+  conflict_strategy: "increment"
+  
+  # Interval for monitoring container status
+  monitor_interval: "30s"

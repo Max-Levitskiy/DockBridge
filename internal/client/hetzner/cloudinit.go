@@ -17,8 +17,28 @@ type CloudInitConfig struct {
 	RunCommands     []string
 }
 
-// GenerateCloudInitScript creates a cloud-init script for Docker CE installation with enhanced volume management
+// GenerateCloudInitScript creates a cloud-init script optimized for Docker pre-installed images
 func GenerateCloudInitScript(config *CloudInitConfig) string {
+	return generateOptimizedCloudInitScript(config)
+}
+
+// GenerateCloudInitForImage creates a cloud-init script optimized for the specific image type
+func GenerateCloudInitForImage(config *CloudInitConfig, imageName string) string {
+	if config == nil {
+		config = GetDefaultCloudInitConfig()
+	}
+
+	// Check if this is a Docker pre-installed image
+	if strings.Contains(strings.ToLower(imageName), "docker") {
+		return generateOptimizedCloudInitScript(config)
+	}
+
+	// Fallback to full Docker installation for non-Docker images
+	return generateFullDockerInstallScript(config)
+}
+
+// generateOptimizedCloudInitScript creates a simplified cloud-init script for Docker pre-installed images
+func generateOptimizedCloudInitScript(config *CloudInitConfig) string {
 	if config == nil {
 		config = &CloudInitConfig{}
 	}
@@ -39,7 +59,103 @@ func GenerateCloudInitScript(config *CloudInitConfig) string {
 
 	script := `#cloud-config
 
-# Update package index
+# Optimized cloud-init for Docker pre-installed images
+# Skip package updates for faster startup
+package_update: false
+package_upgrade: false
+
+# Install only essential additional packages
+packages:
+  - e2fsprogs
+  - parted
+  - htop
+  - vim
+`
+
+	// Add additional packages if specified
+	if len(config.Packages) > 0 {
+		for _, pkg := range config.Packages {
+			script += fmt.Sprintf("  - %s\n", pkg)
+		}
+	}
+
+	// Add SSH key if provided
+	if config.SSHPublicKey != "" {
+		script += fmt.Sprintf(`
+# Configure SSH access
+ssh_authorized_keys:
+  - %s
+`, config.SSHPublicKey)
+	}
+
+	// Add additional users if specified
+	if len(config.AdditionalUsers) > 0 {
+		script += "\n# Create additional users\nusers:\n"
+		for _, user := range config.AdditionalUsers {
+			script += fmt.Sprintf(`  - name: %s
+    groups: docker,sudo
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+`, user)
+		}
+	}
+
+	// Add run commands for optimized Docker volume configuration
+	script += `
+# Run commands for optimized setup (Docker already installed)
+runcmd:
+  # Stop Docker before volume operations (Docker should already be installed)
+  - systemctl stop docker || echo "Docker not running, continuing..."
+`
+
+	// Add the common volume setup, Docker config, and DockBridge server setup
+	script += generateVolumeSetupScript(config)
+	script += generateDockerConfigurationScript(config)
+	script += generateDockBridgeServerScript(config)
+	script += generateFinalConfigurationScript(config)
+
+	return strings.TrimSpace(script)
+}
+
+// GetDefaultCloudInitConfig returns a default cloud-init configuration optimized for Docker images
+func GetDefaultCloudInitConfig() *CloudInitConfig {
+	return &CloudInitConfig{
+		DockerVersion: "latest",
+		VolumeMount:   "/var/lib/docker", // Docker's default data directory
+		KeepAlivePort: 8080,
+		DockerAPIPort: 2376,
+		Packages: []string{
+			"htop",
+			"vim",
+			"e2fsprogs",
+			"parted",
+		}, // Reduced package list for faster startup
+	}
+}
+
+// generateFullDockerInstallScript creates the original full Docker installation script
+func generateFullDockerInstallScript(config *CloudInitConfig) string {
+	if config == nil {
+		config = &CloudInitConfig{}
+	}
+
+	// Set defaults
+	if config.DockerVersion == "" {
+		config.DockerVersion = "latest"
+	}
+	if config.VolumeMount == "" {
+		config.VolumeMount = "/var/lib/docker"
+	}
+	if config.KeepAlivePort == 0 {
+		config.KeepAlivePort = 8080
+	}
+	if config.DockerAPIPort == 0 {
+		config.DockerAPIPort = 2376
+	}
+
+	script := `#cloud-config
+
+# Full Docker installation for non-Docker images
 package_update: true
 package_upgrade: true
 
@@ -87,9 +203,9 @@ ssh_authorized_keys:
 		}
 	}
 
-	// Add run commands for Docker installation and enhanced volume configuration
+	// Add run commands for full Docker installation
 	script += `
-# Run commands for system setup
+# Run commands for full Docker installation
 runcmd:
   # Install Docker CE first (before volume operations)
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
@@ -99,14 +215,28 @@ runcmd:
   
   # Stop Docker before volume operations
   - systemctl stop docker
-  
+`
+
+	// Continue with the rest of the volume setup script...
+	// (The volume setup part remains the same for both optimized and full scripts)
+	script += generateVolumeSetupScript(config)
+	script += generateDockerConfigurationScript(config)
+	script += generateDockBridgeServerScript(config)
+	script += generateFinalConfigurationScript(config)
+
+	return strings.TrimSpace(script)
+}
+
+// generateVolumeSetupScript creates the volume setup portion of cloud-init
+func generateVolumeSetupScript(config *CloudInitConfig) string {
+	return `  
   # Enhanced persistent volume setup for Docker data
   - |
     echo "Setting up persistent volume for Docker data..."
     
-    # Wait for volume device to be available (up to 5 minutes)
+    # Wait for volume device to be available (up to 3 minutes for faster startup)
     VOLUME_DEVICE=""
-    for i in {1..60}; do
+    for i in {1..36}; do
       # Check for common volume device names
       for device in /dev/sdb /dev/vdb /dev/xvdb; do
         if [ -b "$device" ]; then
@@ -115,12 +245,12 @@ runcmd:
           break 2
         fi
       done
-      echo "Waiting for volume device... attempt $i/60"
+      echo "Waiting for volume device... attempt $i/36"
       sleep 5
     done
     
     if [ -z "$VOLUME_DEVICE" ]; then
-      echo "ERROR: No volume device found after 5 minutes"
+      echo "ERROR: No volume device found after 3 minutes"
       echo "Available block devices:"
       lsblk
       exit 1
@@ -195,7 +325,12 @@ runcmd:
       echo "ERROR: Volume mount verification failed"
       exit 1
     fi
-  
+`
+}
+
+// generateDockerConfigurationScript creates the Docker daemon configuration
+func generateDockerConfigurationScript(config *CloudInitConfig) string {
+	return `  
   # Configure Docker daemon with enhanced settings
   - mkdir -p /etc/docker
   - |
@@ -237,7 +372,7 @@ runcmd:
   # Verify Docker is using the persistent volume
   - |
     echo "Verifying Docker configuration..."
-    sleep 10  # Wait for Docker to fully start
+    sleep 5  # Reduced wait time for faster startup
     
     # Check Docker info
     docker info | grep "Docker Root Dir" || echo "Could not verify Docker root directory"
@@ -254,7 +389,12 @@ runcmd:
   
   # Add ubuntu user to docker group
   - usermod -aG docker ubuntu
-  
+`
+}
+
+// generateDockBridgeServerScript creates the DockBridge server setup
+func generateDockBridgeServerScript(config *CloudInitConfig) string {
+	return `  
   # Install DockBridge server component (placeholder for future implementation)
   - |
     cat > /usr/local/bin/dockbridge-server << 'EOF'
@@ -305,7 +445,12 @@ runcmd:
   - ufw allow ` + fmt.Sprintf("%d", config.DockerAPIPort) + `/tcp
   - ufw allow ` + fmt.Sprintf("%d", config.KeepAlivePort) + `/tcp
   - ufw --force enable
-  
+`
+}
+
+// generateFinalConfigurationScript creates the final configuration and health checks
+func generateFinalConfigurationScript(config *CloudInitConfig) string {
+	return `  
   # Set up enhanced log rotation for Docker
   - |
     cat > /etc/logrotate.d/docker << 'EOF'
@@ -355,18 +500,7 @@ runcmd:
   
   # Add cron job for volume health checks
   - echo "*/5 * * * * root /usr/local/bin/docker-volume-health-check >> /var/log/docker-volume-health.log 2>&1" >> /etc/crontab
-`
 
-	// Add additional run commands if specified
-	if len(config.RunCommands) > 0 {
-		script += "\n  # Additional custom commands\n"
-		for _, cmd := range config.RunCommands {
-			script += fmt.Sprintf("  - %s\n", cmd)
-		}
-	}
-
-	// Add final configuration
-	script += `
 # Write completion marker with enhanced information
 write_files:
   - path: /var/log/cloud-init-complete
@@ -390,27 +524,6 @@ write_files:
     permissions: '0644'
 
 # Final message
-final_message: "DockBridge server with enhanced volume management setup completed successfully"
+final_message: "DockBridge server with optimized Docker setup completed successfully"
 `
-
-	return strings.TrimSpace(script)
-}
-
-// GetDefaultCloudInitConfig returns a default cloud-init configuration with enhanced volume settings
-func GetDefaultCloudInitConfig() *CloudInitConfig {
-	return &CloudInitConfig{
-		DockerVersion: "latest",
-		VolumeMount:   "/var/lib/docker", // Docker's default data directory
-		KeepAlivePort: 8080,
-		DockerAPIPort: 2376,
-		Packages: []string{
-			"htop",
-			"vim",
-			"curl",
-			"wget",
-			"unzip",
-			"e2fsprogs",
-			"parted",
-		},
-	}
 }

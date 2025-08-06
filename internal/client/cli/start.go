@@ -67,10 +67,11 @@ func startClient(configPath string) error {
 
 	// Create Hetzner client
 	hetznerConfig := &hetzner.Config{
-		APIToken:   cfg.Hetzner.APIToken,
-		ServerType: cfg.Hetzner.ServerType,
-		Location:   cfg.Hetzner.Location,
-		VolumeSize: cfg.Hetzner.VolumeSize,
+		APIToken:        cfg.Hetzner.APIToken,
+		ServerType:      cfg.Hetzner.ServerType,
+		Location:        cfg.Hetzner.Location,
+		VolumeSize:      cfg.Hetzner.VolumeSize,
+		PreferredImages: cfg.Hetzner.PreferredImages,
 	}
 
 	hetznerClient, err := hetzner.NewClient(hetznerConfig)

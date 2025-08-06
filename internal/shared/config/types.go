@@ -4,12 +4,13 @@ import "time"
 
 // ClientConfig represents the complete client configuration
 type ClientConfig struct {
-	Hetzner   HetznerConfig   `yaml:"hetzner" mapstructure:"hetzner"`
-	Docker    DockerConfig    `yaml:"docker" mapstructure:"docker"`
-	Activity  ActivityConfig  `yaml:"activity" mapstructure:"activity"`
-	KeepAlive KeepAliveConfig `yaml:"keepalive" mapstructure:"keepalive"`
-	SSH       SSHConfig       `yaml:"ssh" mapstructure:"ssh"`
-	Logging   LoggingConfig   `yaml:"logging" mapstructure:"logging"`
+	Hetzner     HetznerConfig     `yaml:"hetzner" mapstructure:"hetzner"`
+	Docker      DockerConfig      `yaml:"docker" mapstructure:"docker"`
+	Activity    ActivityConfig    `yaml:"activity" mapstructure:"activity"`
+	KeepAlive   KeepAliveConfig   `yaml:"keepalive" mapstructure:"keepalive"`
+	SSH         SSHConfig         `yaml:"ssh" mapstructure:"ssh"`
+	Logging     LoggingConfig     `yaml:"logging" mapstructure:"logging"`
+	PortForward PortForwardConfig `yaml:"port_forward" mapstructure:"port_forward"`
 }
 
 // ServerConfig represents the complete server configuration
@@ -21,10 +22,11 @@ type ServerConfig struct {
 
 // HetznerConfig contains Hetzner Cloud API configuration
 type HetznerConfig struct {
-	APIToken   string `yaml:"api_token" mapstructure:"api_token" env:"HETZNER_API_TOKEN"`
-	ServerType string `yaml:"server_type" mapstructure:"server_type" default:"cpx21"`
-	Location   string `yaml:"location" mapstructure:"location" default:"fsn1"`
-	VolumeSize int    `yaml:"volume_size" mapstructure:"volume_size" default:"10"`
+	APIToken        string   `yaml:"api_token" mapstructure:"api_token" env:"HETZNER_API_TOKEN"`
+	ServerType      string   `yaml:"server_type" mapstructure:"server_type" default:"cpx21"`
+	Location        string   `yaml:"location" mapstructure:"location" default:"fsn1"`
+	VolumeSize      int      `yaml:"volume_size" mapstructure:"volume_size" default:"10"`
+	PreferredImages []string `yaml:"preferred_images" mapstructure:"preferred_images" default:"[\"docker-ce\", \"ubuntu-22.04\"]"`
 }
 
 // DockerConfig contains Docker-related configuration
@@ -62,3 +64,18 @@ type LoggingConfig struct {
 	Format string `yaml:"format" mapstructure:"format" default:"json"`
 	Output string `yaml:"output" mapstructure:"output" default:"stdout"`
 }
+
+// PortForwardConfig contains port forwarding configuration
+type PortForwardConfig struct {
+	Enabled          bool             `yaml:"enabled" mapstructure:"enabled" default:"true"`
+	ConflictStrategy ConflictStrategy `yaml:"conflict_strategy" mapstructure:"conflict_strategy" default:"increment"`
+	MonitorInterval  time.Duration    `yaml:"monitor_interval" mapstructure:"monitor_interval" default:"30s"`
+}
+
+// ConflictStrategy defines how to handle port conflicts
+type ConflictStrategy string
+
+const (
+	ConflictStrategyIncrement ConflictStrategy = "increment" // Find next available port
+	ConflictStrategyFail      ConflictStrategy = "fail"      // Return Docker error
+)
