@@ -36,30 +36,30 @@
     - Create integration tests for container lifecycle events
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 4. Enhance Docker client manager for port forwarding integration
-  - [ ] 4.1 Add container event detection to DockerClientManager
+- [x] 4. Enhance Docker client manager for port forwarding integration
+  - [x] 4.1 Add container event detection to DockerClientManager
     - Enhance existing DockerClientManager to register container event handlers
     - Integrate ContainerMonitor with existing Docker client infrastructure
     - Add port forwarding manager initialization to client startup
     - Create unit tests for Docker client integration
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-  - [ ] 4.2 Implement Docker API response interception for port conflicts
+  - [x] 4.2 Implement Docker API response interception for port conflicts
     - Add response interception capability to detect container creation with port mappings
     - Modify Docker responses to reflect actual local port assignments when conflicts occur
     - Return Docker-compatible error messages for port conflicts (fail strategy)
     - Create integration tests with real Docker API responses
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 5. Add CLI integration and status reporting
-  - [ ] 5.1 Implement port forwarding status commands
+- [x] 5. Add CLI integration and status reporting
+  - [x] 5.1 Implement port forwarding status commands
     - Add "dockbridge ports" command to list active port forwards
     - Display container name, local port, remote port, and status for each forward
     - Show port conflict resolutions and actual vs requested port mappings
     - Create unit tests for CLI status display
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [ ] 5.2 Add manual port forwarding controls
+  - [x] 5.2 Add manual port forwarding controls
     - Implement "dockbridge ports add" command for manual port forward creation
     - Implement "dockbridge ports remove" command for manual port forward removal
     - Add "dockbridge ports enable/disable" commands for toggling auto-forwarding
