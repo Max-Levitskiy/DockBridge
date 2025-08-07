@@ -252,4 +252,99 @@ Trying to get Hetzner image: docker-ce
 - New test script demonstrates configuration options
 - Backward compatibility verified
 
-**Status**: ✅ IMPLEMENTED AND TESTED
+**Status**: ✅ IMPLEMENTED AND TESTED---
+
+##
+ Task 5 CLI Integration Issue
+
+**Problem**: The port forwarding CLI commands implemented in Task 5 don't work with actual Docker containers because they're not integrated with the DockBridge daemon.
+
+**Root Cause**: 
+- The CLI commands create standalone `PortForwardManager` instances
+- The `dockbridge start` daemon doesn't integrate with port forwarding infrastructure
+- Tasks 1-4 implemented port forwarding components but they're not connected to the main daemon
+
+**Expected Behavior**: 
+1. User runs `dockbridge start` to start the daemon with port forwarding
+2. User runs `docker run -d -p 8080:80 nginx` 
+3. Daemon detects container creation and automatically creates port forwards
+4. User runs `dockbridge ports list` to see active forwards
+
+**Current Behavior**:
+1. User runs `dockbridge start` - daemon starts but no port forwarding integration
+2. User runs `docker run -d -p 8080:80 nginx` - container runs but no port forwards created
+3. User runs `dockbridge ports list` - shows "No active port forwards" because CLI creates standalone manager
+
+**Solution Required**: 
+- Integrate port forwarding infrastructure with DockBridge daemon in `start` command
+- Make CLI commands connect to running daemon instead of creating standalone managers
+- This requires modifying the daemon to include container monitoring and port forwarding
+
+**Files Affected**:
+- `internal/client/cli/start.go` - needs port forwarding integration
+- `internal/client/cli/ports.go` - needs to connect to running daemon
+- `client/docker/daemon.go` - needs container monitoring integration
+
+**Workaround**: The CLI commands work correctly in isolation with mock data, but need daemon integration for real Docker containers.
+---
+
+
+## DockBridge Architecture Issues Analysis (2025-01-08)
+
+### Problems Identified
+
+1. **Server Lifecycle Management Broken**
+   - Servers being destroyed even when Docker containers are running
+   - No proper activity tracking for server lifecycle decisions
+   - Idle timeout not considering active Docker connections or port forwarding
+
+2. **Port Forwarding Not Working**
+   - Port forward manager only creates metadata, no actual proxy servers
+   - No integration with SSH tunnels for actual traffic forwarding
+   - Interface mismatch between PortForwardManager and ContainerEventHandler
+
+3. **Docker Client Connection Issues**
+   - SSH tunnel and Docker client integration has interface mismatches
+   - No proper connection health monitoring or recovery
+   - Docker client manager has compilation errors due to wrong interfaces
+
+4. **Multiple Instance Conflicts**
+   - No instance locking or conflict detection
+   - Multiple DockBridge instances can conflict on same socket
+   - No cleanup of stale socket files or PID files
+
+5. **Missing Activity Tracking**
+   - No centralized activity tracking for Docker commands, port forwarding, connections
+   - Server lifecycle decisions not based on actual usage patterns
+   - No integration between components for activity reporting
+
+### Root Cause Analysis
+
+The main issue is that the dynamic port forwarding implementation was built on top of an incomplete foundation:
+
+1. **Interface Incompatibility**: The port forward manager was designed to implement `ContainerEventHandler` but the method signatures don't match
+2. **Missing Implementation**: Port forwarding creates metadata but no actual proxy servers
+3. **Poor Integration**: Components don't properly communicate activity to server lifecycle management
+4. **No Instance Management**: Multiple instances can conflict without detection
+
+### Solution Approach
+
+Created comprehensive spec "dockbridge-architecture-fix" that:
+
+1. **Fixes Interface Issues**: Corrects all interface mismatches and type errors
+2. **Implements Real Port Forwarding**: Creates actual TCP proxy servers with SSH tunnel integration
+3. **Adds Activity Tracking**: Centralized activity tracking for all operations
+4. **Implements Instance Management**: Proper instance locking and conflict resolution
+5. **Enhances Connection Reliability**: Connection health monitoring and automatic recovery
+
+### Key Architectural Changes
+
+1. **Activity-Based Server Lifecycle**: Server destruction based on actual activity, not just container state
+2. **Real Proxy Servers**: Actual TCP listeners that forward traffic through SSH tunnels
+3. **Instance Locking**: PID files and socket checking to prevent conflicts
+4. **Centralized Error Handling**: Structured error handling with recovery suggestions
+5. **Component Integration**: Proper dependency injection and lifecycle management
+
+### Next Steps
+
+Execute the implementation plan in the spec to fix these architectural issues systematically.

@@ -48,6 +48,17 @@
 - Register port forward manager as container event handler: `monitor.RegisterContainerEventHandler(pfManager)`
 - Set polling interval for testing: `monitor.SetPollingInterval(100 * time.Millisecond)`
 - Use `monitor.ContainerInfo` and `monitor.PortMapping` types for container information
+
+## Port Forwarding CLI Commands (Task 5)
+
+### Do:
+- `dockbridge ports list` or `dockbridge ports ls` - List all active port forwards with status
+- `dockbridge ports add <container_id> <local_port> <remote_port>` - Add manual port forward
+- `dockbridge ports remove <container_id> <local_port>` - Remove manual port forward
+- `dockbridge ports enable` - Enable automatic port forwarding for new containers
+- `dockbridge ports disable` - Disable automatic port forwarding for new containers
+- `go test -v ./internal/client/cli -run TestPorts` - Run all port forwarding CLI tests
+- Use `--config` flag to specify custom configuration file for port commands
 - Handle container ID length safely when creating forward IDs (use prefix if longer than 12 chars)
 
 ### Don't:
@@ -56,3 +67,32 @@
 - Don't create import cycles between monitor and portforward packages in tests - 1 time
 - Don't use `.Once()` mock expectations with polling-based monitoring (causes unexpected call panics) - 1 time
 
+## Docker Client Manager Integration
+
+### Do:
+- `go test ./internal/client/docker -v` - Run Docker client manager tests including port forwarding integration
+- Use `NewDockerClientManagerWithPortForwarding()` constructor for port forwarding support
+- Call `StartPortForwarding(ctx)` after establishing Docker connection to initialize monitoring
+- Call `StopPortForwarding()` before closing to clean up resources
+- Use `RegisterContainerEventHandler()` to register custom event handlers
+- Use `InterceptDockerResponse()` to modify Docker API responses for port conflicts
+- Check `portForwardConfig.Enabled` before initializing port forwarding components
+- Handle both increment and fail strategies in port conflict resolution
+
+### Don't:
+- Don't call `StartPortForwarding()` without a valid Docker connection (causes connection errors) - 1 time
+- Don't forget to call `StopPortForwarding()` in the Close() method (causes resource leaks) - 1 time
+- Don't assume port forwarding is always enabled - check configuration first
+- Don't mock incomplete interfaces in tests - implement all required methods for HetznerClient interface
+## I
+nterface Compatibility Fixes (2025-01-08)
+
+### Do:
+- Fix SSH import paths from `github.com/dockbridge/dockbridge/client/ssh` to `github.com/dockbridge/dockbridge/internal/client/ssh`
+- Ensure PortForwardManager interface properly implements ContainerEventHandler with correct method signatures
+- Use unit tests to verify interface compatibility: `go test ./internal/client/portforward/ -v -run TestPortForwardManagerImplementsContainerEventHandler`
+- Test compilation after interface fixes: `go build ./internal/client/docker/`
+
+### Don't:
+- Don't assume interface compatibility without testing - create explicit tests to verify
+- Don't mix import paths between `client/` and `internal/client/` packages
