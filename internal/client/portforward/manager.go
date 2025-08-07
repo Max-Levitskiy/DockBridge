@@ -16,7 +16,7 @@ type PortForwardManager interface {
 	Start(ctx context.Context) error
 	Stop() error
 
-	// Container lifecycle events
+	// Container lifecycle events (implements monitor.ContainerEventHandler)
 	OnContainerCreated(container *monitor.ContainerInfo) error
 	OnContainerStopped(containerID string) error
 	OnContainerRemoved(containerID string) error
