@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dockbridge/dockbridge/client/ssh"
+	"github.com/dockbridge/dockbridge/internal/client/ssh"
 	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/pkg/errors"
 )
