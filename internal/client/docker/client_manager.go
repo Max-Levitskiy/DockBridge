@@ -12,12 +12,32 @@ import (
 	"time"
 
 	"github.com/dockbridge/dockbridge/internal/client/hetzner"
+	"github.com/dockbridge/dockbridge/internal/client/monitor"
+	"github.com/dockbridge/dockbridge/internal/client/portforward"
 	"github.com/dockbridge/dockbridge/internal/client/ssh"
 	"github.com/dockbridge/dockbridge/internal/shared/config"
 	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 )
+
+// DockerContainerCreateResponse represents a Docker container creation response
+type DockerContainerCreateResponse struct {
+	ID       string                   `json:"Id"`
+	Warnings []string                 `json:"Warnings"`
+	Ports    map[string][]PortBinding `json:"Ports,omitempty"`
+}
+
+// PortBinding represents a Docker port binding
+type PortBinding struct {
+	HostIP   string `json:"HostIp"`
+	HostPort string `json:"HostPort"`
+}
+
+// DockerErrorResponse represents a Docker API error response
+type DockerErrorResponse struct {
+	Message string `json:"message"`
+}
 
 // DockerClientManager manages Docker client connections over SSH tunnels
 // This is a simplified approach that replaces the complex HTTP proxy layer with
@@ -26,10 +46,20 @@ import (
 // - Automatic server provisioning when Docker client connection fails
 // - Direct Docker daemon access via SSH tunnel without proxy layer
 // - Context-aware operations for proper cancellation and timeouts
+// - Integrated container monitoring and port forwarding
 type DockerClientManager interface {
 	GetClient(ctx context.Context) (*client.Client, error)
 	EnsureConnection(ctx context.Context) error
 	Close() error
+
+	// Port forwarding integration
+	RegisterContainerEventHandler(handler monitor.ContainerEventHandler) error
+	StartPortForwarding(ctx context.Context) error
+	StopPortForwarding() error
+	GetPortForwardManager() portforward.PortForwardManager
+
+	// Docker API response interception
+	InterceptDockerResponse(response []byte) ([]byte, error)
 }
 
 // dockerClientManagerImpl implements DockerClientManager
@@ -44,6 +74,11 @@ type dockerClientManagerImpl struct {
 	sshClient     ssh.Client
 	tunnel        ssh.TunnelInterface
 	dockerClient  *client.Client
+
+	// Port forwarding components
+	containerMonitor   monitor.ContainerMonitor
+	portForwardManager portforward.PortForwardManager
+	portForwardConfig  *config.PortForwardConfig
 }
 
 // NewDockerClientManager creates a new Docker client manager
@@ -53,6 +88,17 @@ func NewDockerClientManager(hetznerClient hetzner.HetznerClient, sshConfig *conf
 		sshConfig:     sshConfig,
 		hetznerConfig: hetznerConfig,
 		logger:        logger,
+	}
+}
+
+// NewDockerClientManagerWithPortForwarding creates a new Docker client manager with port forwarding support
+func NewDockerClientManagerWithPortForwarding(hetznerClient hetzner.HetznerClient, sshConfig *config.SSHConfig, hetznerConfig *config.HetznerConfig, portForwardConfig *config.PortForwardConfig, logger logger.LoggerInterface) DockerClientManager {
+	return &dockerClientManagerImpl{
+		hetznerClient:     hetznerClient,
+		sshConfig:         sshConfig,
+		hetznerConfig:     hetznerConfig,
+		portForwardConfig: portForwardConfig,
+		logger:            logger,
 	}
 }
 
@@ -197,6 +243,14 @@ func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error 
 // Close closes all connections and cleans up resources
 func (dcm *dockerClientManagerImpl) Close() error {
 	dcm.logger.Info("Closing Docker client manager")
+
+	// Stop port forwarding first
+	if err := dcm.StopPortForwarding(); err != nil {
+		dcm.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Error stopping port forwarding during close")
+	}
+
 	dcm.cleanup()
 	dcm.logger.Info("Docker client manager closed")
 	return nil
@@ -583,4 +637,145 @@ func (dcm *dockerClientManagerImpl) cleanupStaleServers(ctx context.Context, ser
 			}).Info("Successfully cleaned up stale server")
 		}
 	}
+}
+
+// Port forwarding integration methods
+
+// RegisterContainerEventHandler registers a handler for container lifecycle events
+func (dcm *dockerClientManagerImpl) RegisterContainerEventHandler(handler monitor.ContainerEventHandler) error {
+	if dcm.containerMonitor == nil {
+		return fmt.Errorf("container monitor not initialized - call StartPortForwarding first")
+	}
+
+	return dcm.containerMonitor.RegisterContainerEventHandler(handler)
+}
+
+// StartPortForwarding initializes and starts the port forwarding system
+func (dcm *dockerClientManagerImpl) StartPortForwarding(ctx context.Context) error {
+	if dcm.portForwardConfig == nil {
+		dcm.logger.Info("Port forwarding not configured, skipping initialization")
+		return nil
+	}
+
+	if !dcm.portForwardConfig.Enabled {
+		dcm.logger.Info("Port forwarding disabled in configuration")
+		return nil
+	}
+
+	// Ensure we have a Docker client connection
+	dockerClient, err := dcm.GetClient(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get Docker client for port forwarding")
+	}
+
+	// Initialize container monitor
+	dcm.containerMonitor = monitor.NewContainerMonitor(dockerClient, dcm.logger)
+
+	// Initialize port forward manager
+	dcm.portForwardManager = portforward.NewPortForwardManager(dcm.portForwardConfig, dcm.logger)
+
+	// Register port forward manager as container event handler
+	err = dcm.containerMonitor.RegisterContainerEventHandler(dcm.portForwardManager)
+	if err != nil {
+		return errors.Wrap(err, "failed to register port forward manager as event handler")
+	}
+
+	// Start port forward manager
+	err = dcm.portForwardManager.Start(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to start port forward manager")
+	}
+
+	// Start container monitor
+	err = dcm.containerMonitor.Start(ctx)
+	if err != nil {
+		dcm.portForwardManager.Stop()
+		return errors.Wrap(err, "failed to start container monitor")
+	}
+
+	dcm.logger.WithFields(map[string]interface{}{
+		"enabled":           dcm.portForwardConfig.Enabled,
+		"conflict_strategy": dcm.portForwardConfig.ConflictStrategy,
+		"monitor_interval":  dcm.portForwardConfig.MonitorInterval,
+	}).Info("Port forwarding system started successfully")
+
+	return nil
+}
+
+// StopPortForwarding stops the port forwarding system
+func (dcm *dockerClientManagerImpl) StopPortForwarding() error {
+	var errors []error
+
+	if dcm.containerMonitor != nil {
+		if err := dcm.containerMonitor.Stop(); err != nil {
+			errors = append(errors, fmt.Errorf("failed to stop container monitor: %w", err))
+		}
+		dcm.containerMonitor = nil
+	}
+
+	if dcm.portForwardManager != nil {
+		if err := dcm.portForwardManager.Stop(); err != nil {
+			errors = append(errors, fmt.Errorf("failed to stop port forward manager: %w", err))
+		}
+		dcm.portForwardManager = nil
+	}
+
+	if len(errors) > 0 {
+		dcm.logger.WithFields(map[string]interface{}{
+			"error_count": len(errors),
+		}).Error("Errors occurred while stopping port forwarding system")
+		return fmt.Errorf("multiple errors stopping port forwarding: %v", errors)
+	}
+
+	dcm.logger.Info("Port forwarding system stopped successfully")
+	return nil
+}
+
+// GetPortForwardManager returns the port forward manager instance
+func (dcm *dockerClientManagerImpl) GetPortForwardManager() portforward.PortForwardManager {
+	return dcm.portForwardManager
+}
+
+// InterceptDockerResponse intercepts and modifies Docker API responses for port forwarding
+func (dcm *dockerClientManagerImpl) InterceptDockerResponse(response []byte) ([]byte, error) {
+	// If port forwarding is not enabled, return response unchanged
+	if dcm.portForwardConfig == nil || !dcm.portForwardConfig.Enabled {
+		return response, nil
+	}
+
+	// If port forward manager is not initialized, return response unchanged
+	if dcm.portForwardManager == nil {
+		return response, nil
+	}
+
+	// For now, this is a placeholder implementation
+	// In a full implementation, this would:
+	// 1. Parse JSON responses to detect container creation
+	// 2. Extract port mapping information
+	// 3. Check for port conflicts using the port conflict resolver
+	// 4. Modify the response to reflect actual assigned ports
+	// 5. Return Docker-compatible error responses for conflicts (fail strategy)
+
+	dcm.logger.Debug("Docker API response interception called (placeholder implementation)")
+
+	// Return response unchanged for now
+	return response, nil
+}
+
+// processPortMappings processes port mappings and handles conflicts
+func (dcm *dockerClientManagerImpl) processPortMappings(ports map[string][]PortBinding) (map[string][]PortBinding, error) {
+	// This is a simplified implementation
+	// In a full implementation, this would:
+	// 1. Check each port for availability
+	// 2. Use the port conflict resolver to handle conflicts
+	// 3. Update port mappings with actual assigned ports
+	// 4. Return modified port mappings
+
+	dcm.logger.WithFields(map[string]interface{}{
+		"port_count": len(ports),
+	}).Debug("Processing port mappings for conflicts")
+
+	// For now, return nil to indicate no modifications
+	// This preserves the original behavior while providing the infrastructure
+	return nil, nil
 }
