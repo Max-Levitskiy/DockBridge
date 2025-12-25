@@ -395,41 +395,97 @@ func generateDockerConfigurationScript(config *CloudInitConfig) string {
 // generateDockBridgeServerScript creates the DockBridge server setup
 func generateDockBridgeServerScript(config *CloudInitConfig) string {
 	return `  
-  # Install DockBridge server component (placeholder for future implementation)
+  # Install DockBridge server component
   - |
-    cat > /usr/local/bin/dockbridge-server << 'EOF'
-    #!/bin/bash
-    # DockBridge server placeholder
-    # This will be replaced with actual server binary
-    echo "DockBridge server starting on port ` + fmt.Sprintf("%d", config.KeepAlivePort) + `"
-    echo "Docker data directory: ` + config.VolumeMount + `"
-    echo "Volume mount status: $(mountpoint ` + config.VolumeMount + ` && echo 'mounted' || echo 'not mounted')"
+    echo "Installing DockBridge server..."
     
-    while true; do
-      # Simple health check
-      if ! mountpoint -q ` + config.VolumeMount + `; then
-        echo "ERROR: Docker volume not mounted!"
-      fi
-      sleep 30
-    done
+    # Get server metadata (server ID for self-destruction)
+    SERVER_ID=$(curl -s http://169.254.169.254/hetzner/v1/metadata/instance-id 2>/dev/null || echo "unknown")
+    
+    # Try to download binary from GitHub releases
+    DOCKBRIDGE_VERSION="${DOCKBRIDGE_VERSION:-latest}"
+    DOWNLOAD_URL="https://github.com/dockbridge/dockbridge/releases/download/${DOCKBRIDGE_VERSION}/dockbridge-server-linux-amd64"
+    
+    if curl -fsSL -o /usr/local/bin/dockbridge-server "${DOWNLOAD_URL}" 2>/dev/null; then
+      chmod +x /usr/local/bin/dockbridge-server
+      echo "DockBridge server binary downloaded from releases"
+    else
+      # Fall back to placeholder script for development
+      echo "Could not download binary, using placeholder script"
+      cat > /usr/local/bin/dockbridge-server << 'SCRIPT'
+#!/bin/bash
+# DockBridge server placeholder - development fallback
+echo "DockBridge server starting on port ` + fmt.Sprintf("%d", config.KeepAlivePort) + `"
+echo "Docker data directory: ` + config.VolumeMount + `"
+echo "Server ID: ${HETZNER_SERVER_ID:-unknown}"
+
+LAST_HEARTBEAT=$(date +%s)
+TIMEOUT_SECONDS=300  # 5 minutes
+
+while true; do
+  CURRENT_TIME=$(date +%s)
+  TIME_SINCE_HEARTBEAT=$((CURRENT_TIME - LAST_HEARTBEAT))
+  
+  # Simple HTTP server for heartbeat
+  if nc -z -w1 localhost ` + fmt.Sprintf("%d", config.KeepAlivePort) + ` 2>/dev/null; then
+    LAST_HEARTBEAT=$(date +%s)
+  fi
+  
+  # Check if timed out
+  if [ $TIME_SINCE_HEARTBEAT -gt $TIMEOUT_SECONDS ]; then
+    echo "WARNING: Keep-alive timeout exceeded!"
+    # In real implementation, this would trigger self-destruction
+  fi
+  
+  # Volume health check
+  if ! mountpoint -q ` + config.VolumeMount + `; then
+    echo "ERROR: Docker volume not mounted!"
+  fi
+  
+  sleep 10
+done
+SCRIPT
+      chmod +x /usr/local/bin/dockbridge-server
+    fi
+  
+  # Create server configuration
+  - mkdir -p /etc/dockbridge
+  - |
+    cat > /etc/dockbridge/server.yaml << EOF
+    port: ` + fmt.Sprintf("%d", config.KeepAlivePort) + `
+    timeout: 5m
+    grace_period: 30s
+    docker_socket_path: /var/run/docker.sock
+    docker_api_port: ` + fmt.Sprintf("%d", config.DockerAPIPort) + `
+    volume_mount: ` + config.VolumeMount + `
     EOF
   
-  - chmod +x /usr/local/bin/dockbridge-server
+  # Export server metadata as environment variables
+  - |
+    cat > /etc/dockbridge/env << EOF
+    HETZNER_SERVER_ID=$(curl -s http://169.254.169.254/hetzner/v1/metadata/instance-id 2>/dev/null || echo "unknown")
+    HETZNER_API_TOKEN=${HETZNER_API_TOKEN:-}
+    DOCKBRIDGE_PORT=` + fmt.Sprintf("%d", config.KeepAlivePort) + `
+    DOCKBRIDGE_TIMEOUT=5m
+    EOF
   
   # Create systemd service for DockBridge server
   - |
     cat > /etc/systemd/system/dockbridge-server.service << 'EOF'
     [Unit]
-    Description=DockBridge Server
-    After=docker.service
+    Description=DockBridge Keep-Alive Server
+    After=docker.service network.target
     Requires=docker.service
     
     [Service]
     Type=simple
     User=root
-    ExecStart=/usr/local/bin/dockbridge-server
+    EnvironmentFile=/etc/dockbridge/env
+    ExecStart=/usr/local/bin/dockbridge-server --config /etc/dockbridge/server.yaml --server-id=${HETZNER_SERVER_ID}
     Restart=always
     RestartSec=10
+    StandardOutput=journal
+    StandardError=journal
     
     [Install]
     WantedBy=multi-user.target
