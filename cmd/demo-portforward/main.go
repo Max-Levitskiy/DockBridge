@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dockbridge/dockbridge/internal/client/portforward"
+	"github.com/dockbridge/dockbridge/client/portforward"
 )
 
 func main() {

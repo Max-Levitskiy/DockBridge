@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dockbridge/dockbridge/internal/client/hetzner"
-	"github.com/dockbridge/dockbridge/internal/shared/config"
+	"github.com/dockbridge/dockbridge/client/hetzner"
+	"github.com/dockbridge/dockbridge/shared/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

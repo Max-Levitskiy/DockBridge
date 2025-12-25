@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dockbridge/dockbridge/internal/client/hetzner"
-	"github.com/dockbridge/dockbridge/internal/shared/config"
+	"github.com/dockbridge/dockbridge/client/hetzner"
+	"github.com/dockbridge/dockbridge/shared/config"
 	"github.com/pkg/errors"
 )
 

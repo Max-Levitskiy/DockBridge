@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/dockbridge/dockbridge/internal/client/hetzner"
-	"github.com/dockbridge/dockbridge/internal/server"
-	"github.com/dockbridge/dockbridge/internal/shared/config"
+	"github.com/dockbridge/dockbridge/client/hetzner"
+	"github.com/dockbridge/dockbridge/server"
+	"github.com/dockbridge/dockbridge/shared/config"
 )
 
 func main() {

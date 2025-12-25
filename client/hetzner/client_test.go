@@ -177,9 +177,12 @@ func TestGenerateCloudInitScript(t *testing.T) {
 	assert.Contains(t, script, "#cloud-config")
 	assert.Contains(t, script, "ssh-rsa AAAAB3NzaC1yc2E...")
 	assert.Contains(t, script, "/var/lib/docker")
-	assert.Contains(t, script, "docker-ce")
+	// Optimized script skips Docker installation (package_update: false)
+	assert.Contains(t, script, "package_update: false")
 	assert.Contains(t, script, "2376")
 	assert.Contains(t, script, "8080")
+	// Should contain volume setup
+	assert.Contains(t, script, "Enhanced persistent volume setup for Docker data")
 }
 
 func TestGenerateCloudInitScriptDefaults(t *testing.T) {
@@ -187,9 +190,13 @@ func TestGenerateCloudInitScriptDefaults(t *testing.T) {
 
 	assert.Contains(t, script, "#cloud-config")
 	assert.Contains(t, script, "/var/lib/docker")
-	assert.Contains(t, script, "docker-ce")
+	// Optimized script uses package_update: false
+	assert.Contains(t, script, "package_update: false")
 	assert.Contains(t, script, "2376")
 	assert.Contains(t, script, "8080")
+	// Should contain volume setup and DockBridge server placeholder
+	assert.Contains(t, script, "Enhanced persistent volume setup for Docker data")
+	assert.Contains(t, script, "DockBridge server placeholder")
 }
 
 func TestGetDefaultCloudInitConfigInternal(t *testing.T) {

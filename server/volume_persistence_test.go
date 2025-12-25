@@ -186,7 +186,8 @@ func TestCloudInitScriptGeneration(t *testing.T) {
 
 			// Verify script contains essential components
 			assert.Contains(t, script, "#cloud-config")
-			assert.Contains(t, script, "docker-ce")
+			// Optimized script uses package_update: false (Docker pre-installed)
+			assert.Contains(t, script, "package_update: false")
 			assert.Contains(t, script, "/var/lib/docker")
 			assert.Contains(t, script, "data-root")
 			assert.Contains(t, script, "mkfs.ext4")
