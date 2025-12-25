@@ -200,7 +200,7 @@ func (m *Manager) validateHetzner() error {
 	}
 
 	// Validate server type
-	validServerTypes := []string{"cx11", "cpx11", "cx21", "cpx21", "cx31", "cpx31", "cx41", "cpx41", "cx51", "cpx51"}
+	validServerTypes := []string{"cx11", "cpx11", "cx21", "cx23", "cpx21", "cx31", "cpx31", "cx41", "cpx41", "cx51", "cpx51"}
 	if !contains(validServerTypes, hetzner.ServerType) {
 		return fmt.Errorf("invalid server_type '%s', must be one of: %s", hetzner.ServerType, strings.Join(validServerTypes, ", "))
 	}

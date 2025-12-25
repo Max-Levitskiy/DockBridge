@@ -26,7 +26,7 @@ func TestInitializeDefaultConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check that the client config file was created
-	clientConfigPath := filepath.Join(configDir, "client.yaml")
+	clientConfigPath := filepath.Join(configDir, "configs", "client.yaml")
 	_, err = os.Stat(clientConfigPath)
 	assert.NoError(t, err)
 

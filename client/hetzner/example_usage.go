@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+
 )
 
 // ExampleUsage demonstrates how to use the Hetzner Cloud API client
@@ -92,7 +93,7 @@ func ExampleCloudInitGeneration() {
 	config := &CloudInitConfig{
 		DockerVersion: "latest",
 		SSHPublicKey:  "ssh-rsa AAAAB3NzaC1yc2E... your-public-key-here",
-		VolumeMount:   "/mnt/docker-data",
+		VolumeMount:   "/var/lib/docker",
 		KeepAlivePort: 8080,
 		DockerAPIPort: 2376,
 		Packages: []string{

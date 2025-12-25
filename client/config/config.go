@@ -114,6 +114,11 @@ func (m *Manager) setDefaults() {
 	m.viper.SetDefault("docker.socket_path", "/var/run/docker.sock")
 	m.viper.SetDefault("docker.proxy_port", 2376)
 
+	// Activity defaults - Reasonable production values
+	m.viper.SetDefault("activity.idle_timeout", "5m")
+	m.viper.SetDefault("activity.connection_timeout", "30m")
+	m.viper.SetDefault("activity.grace_period", "30s")
+
 	// Keep-alive defaults
 	m.viper.SetDefault("keepalive.interval", "30s")
 	m.viper.SetDefault("keepalive.timeout", "5m")
@@ -132,6 +137,11 @@ func (m *Manager) setDefaults() {
 	m.viper.SetDefault("logging.level", "info")
 	m.viper.SetDefault("logging.format", "json")
 	m.viper.SetDefault("logging.output", "stdout")
+
+	// Port forwarding defaults
+	m.viper.SetDefault("port_forward.enabled", true)
+	m.viper.SetDefault("port_forward.conflict_strategy", "increment")
+	m.viper.SetDefault("port_forward.monitor_interval", "30s")
 }
 
 // validate performs comprehensive configuration validation
@@ -148,6 +158,11 @@ func (m *Manager) validate() error {
 		errors = append(errors, fmt.Sprintf("docker: %v", err))
 	}
 
+	// Validate Activity configuration
+	if err := m.validateActivity(); err != nil {
+		errors = append(errors, fmt.Sprintf("activity: %v", err))
+	}
+
 	// Validate Keep-alive configuration
 	if err := m.validateKeepAlive(); err != nil {
 		errors = append(errors, fmt.Sprintf("keepalive: %v", err))
@@ -161,6 +176,11 @@ func (m *Manager) validate() error {
 	// Validate Logging configuration
 	if err := m.validateLogging(); err != nil {
 		errors = append(errors, fmt.Sprintf("logging: %v", err))
+	}
+
+	// Validate Port forwarding configuration
+	if err := m.validatePortForward(); err != nil {
+		errors = append(errors, fmt.Sprintf("port_forward: %v", err))
 	}
 
 	if len(errors) > 0 {
@@ -180,7 +200,7 @@ func (m *Manager) validateHetzner() error {
 	}
 
 	// Validate server type
-	validServerTypes := []string{"cx11", "cpx11", "cx21", "cpx21", "cx31", "cpx31", "cx41", "cpx41", "cx51", "cpx51"}
+	validServerTypes := []string{"cx11", "cpx11", "cx21", "cx23", "cpx21", "cx31", "cpx31", "cx41", "cpx41", "cx51", "cpx51"}
 	if !contains(validServerTypes, hetzner.ServerType) {
 		return fmt.Errorf("invalid server_type '%s', must be one of: %s", hetzner.ServerType, strings.Join(validServerTypes, ", "))
 	}
@@ -203,20 +223,20 @@ func (m *Manager) validateHetzner() error {
 func (m *Manager) validateDocker() error {
 	docker := &m.config.Docker
 
-	// Validate socket path directory exists and is writable (if not tcp mode or port format)
-	if docker.SocketPath != "tcp" && !strings.HasPrefix(docker.SocketPath, ":") {
-		// For Unix socket paths, check that the directory exists and is writable
-		socketDir := filepath.Dir(docker.SocketPath)
-		if _, err := os.Stat(socketDir); err != nil {
-			return fmt.Errorf("docker socket directory '%s' does not exist", socketDir)
+	// Validate socket path directory exists and is writable (DockBridge will create the socket)
+	if docker.SocketPath != "/var/run/docker.sock" && docker.SocketPath != "tcp" && !strings.HasPrefix(docker.SocketPath, ":") {
+		// Check if the directory exists and is writable
+		dir := filepath.Dir(docker.SocketPath)
+		if _, err := os.Stat(dir); err != nil {
+			return fmt.Errorf("directory for docker socket path '%s' does not exist: %s", docker.SocketPath, dir)
 		}
 
-		// Check if directory is writable by trying to create a temporary file
-		tempFile := filepath.Join(socketDir, ".dockbridge_test")
-		if f, err := os.Create(tempFile); err != nil {
-			return fmt.Errorf("docker socket directory '%s' is not writable", socketDir)
+		// Test if we can write to the directory by creating a temporary file
+		tempFile := filepath.Join(dir, ".dockbridge-test")
+		if file, err := os.Create(tempFile); err != nil {
+			return fmt.Errorf("cannot write to directory for docker socket path '%s': %s", docker.SocketPath, dir)
 		} else {
-			f.Close()
+			file.Close()
 			os.Remove(tempFile)
 		}
 	}
@@ -224,6 +244,33 @@ func (m *Manager) validateDocker() error {
 	// Validate proxy port
 	if docker.ProxyPort < 1024 || docker.ProxyPort > 65535 {
 		return fmt.Errorf("proxy_port must be between 1024 and 65535, got %d", docker.ProxyPort)
+	}
+
+	return nil
+}
+
+// validateActivity validates activity tracking configuration
+func (m *Manager) validateActivity() error {
+	activity := &m.config.Activity
+
+	// Validate idle timeout - Allow short timeouts for testing but reasonable minimums
+	if activity.IdleTimeout < 30*time.Second {
+		return fmt.Errorf("idle_timeout must be at least 30 seconds, got %v", activity.IdleTimeout)
+	}
+
+	// Validate connection timeout - Allow short timeouts for testing but reasonable minimums
+	if activity.ConnectionTimeout < time.Minute {
+		return fmt.Errorf("connection_timeout must be at least 1 minute, got %v", activity.ConnectionTimeout)
+	}
+
+	// Validate grace period
+	if activity.GracePeriod < time.Second {
+		return fmt.Errorf("grace_period must be at least 1 second, got %v", activity.GracePeriod)
+	}
+
+	// Ensure connection timeout is longer than idle timeout
+	if activity.ConnectionTimeout <= activity.IdleTimeout {
+		return fmt.Errorf("connection_timeout (%v) must be greater than idle_timeout (%v)", activity.ConnectionTimeout, activity.IdleTimeout)
 	}
 
 	return nil
@@ -301,6 +348,24 @@ func (m *Manager) validateLogging() error {
 	validOutputs := []string{"stdout", "stderr"}
 	if !contains(validOutputs, strings.ToLower(logging.Output)) && !strings.HasPrefix(logging.Output, "/") {
 		return fmt.Errorf("invalid output '%s', must be 'stdout', 'stderr', or a file path", logging.Output)
+	}
+
+	return nil
+}
+
+// validatePortForward validates port forwarding configuration
+func (m *Manager) validatePortForward() error {
+	portForward := &m.config.PortForward
+
+	// Validate conflict strategy
+	validStrategies := []string{"increment", "fail"}
+	if !contains(validStrategies, string(portForward.ConflictStrategy)) {
+		return fmt.Errorf("invalid conflict_strategy '%s', must be one of: %s", portForward.ConflictStrategy, strings.Join(validStrategies, ", "))
+	}
+
+	// Validate monitor interval
+	if portForward.MonitorInterval < time.Second {
+		return fmt.Errorf("monitor_interval must be at least 1 second, got %v", portForward.MonitorInterval)
 	}
 
 	return nil

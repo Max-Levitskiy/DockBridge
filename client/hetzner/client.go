@@ -33,10 +33,11 @@ type Client struct {
 
 // Config holds the Hetzner client configuration
 type Config struct {
-	APIToken   string
-	ServerType string
-	Location   string
-	VolumeSize int
+	APIToken        string
+	ServerType      string
+	Location        string
+	VolumeSize      int
+	PreferredImages []string
 }
 
 // NewClient creates a new Hetzner client instance
@@ -61,6 +62,7 @@ type ServerConfig struct {
 	SSHKeyID   int64
 	VolumeID   string
 	UserData   string
+	ImageName  string // Added to track which image is being used
 }
 
 // Server represents a Hetzner Cloud server
@@ -110,13 +112,44 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 		return nil, fmt.Errorf("location %s not found", config.Location)
 	}
 
-	// Get image (Ubuntu 22.04)
-	image, _, err := c.hcloud.Image.GetByName(ctx, "ubuntu-22.04")
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get Ubuntu image")
+	// Get image based on preference order (configurable with fallback)
+	var image *hcloud.Image
+	var imageName string
+
+	// Use configured preferred images or default fallback
+	preferredImages := c.config.PreferredImages
+	if len(preferredImages) == 0 {
+		preferredImages = []string{"docker-ce", "ubuntu-22.04"}
+		fmt.Printf("No preferred images configured, using defaults: %v\n", preferredImages)
+	} else {
+		fmt.Printf("Using configured preferred images: %v\n", preferredImages)
 	}
+
+	// Try each preferred image in order
+	for _, preferredImage := range preferredImages {
+		fmt.Printf("Trying to get Hetzner image: %s\n", preferredImage)
+		image, _, err = c.hcloud.Image.GetByNameAndArchitecture(ctx, preferredImage, hcloud.ArchitectureX86)
+		if err == nil && image != nil {
+			imageName = preferredImage
+			fmt.Printf("✓ Successfully selected Hetzner image: %s (ID: %d)\n", imageName, image.ID)
+			break
+		}
+		fmt.Printf("✗ Image %s not available, trying next option\n", preferredImage)
+	}
+
+	// If no preferred image was found, return error
 	if image == nil {
-		return nil, errors.New("Ubuntu 22.04 image not found")
+		return nil, errors.New("no suitable server image found from preferred list")
+	}
+
+	// Store the image name in config for cloud-init optimization
+	config.ImageName = imageName
+
+	// Generate optimized cloud-init script based on selected image
+	if config.UserData == "" {
+		// Generate default cloud-init configuration optimized for the selected image
+		cloudInitConfig := GetDefaultCloudInitConfig()
+		config.UserData = GenerateCloudInitForImage(cloudInitConfig, imageName)
 	}
 
 	// Prepare server creation options
@@ -127,10 +160,8 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 		Location:   location,
 	}
 
-	// Add UserData if provided
-	if config.UserData != "" {
-		opts.UserData = config.UserData
-	}
+	// Add UserData (now guaranteed to be set)
+	opts.UserData = config.UserData
 
 	// Add SSH key if provided
 	if config.SSHKeyID > 0 {
@@ -140,8 +171,13 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 
 	// Add volume if provided
 	if config.VolumeID != "" {
-		volume := &hcloud.Volume{ID: parseVolumeID(config.VolumeID)}
+		volumeID := parseVolumeID(config.VolumeID)
+		fmt.Printf("DEBUG: Adding volume to server creation - VolumeID string: %s, parsed ID: %d\n", config.VolumeID, volumeID)
+		volume := &hcloud.Volume{ID: volumeID}
 		opts.Volumes = []*hcloud.Volume{volume}
+		fmt.Printf("DEBUG: Volume added to server creation options\n")
+	} else {
+		fmt.Printf("DEBUG: No volume ID provided for server creation\n")
 	}
 
 	// Create the server
@@ -151,8 +187,7 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 	}
 
 	// Wait for server to be running
-	_, errCh := c.hcloud.Action.WatchProgress(ctx, result.Action)
-	if err := <-errCh; err != nil {
+	if err := c.hcloud.Action.WaitFor(ctx, result.Action); err != nil {
 		return nil, errors.Wrap(err, "failed to wait for server creation")
 	}
 
@@ -195,7 +230,7 @@ func (c *Client) DestroyServer(ctx context.Context, serverID string) error {
 	return nil
 }
 
-// CreateVolume creates a new persistent volume
+// CreateVolume creates a new persistent volume for Docker data
 func (c *Client) CreateVolume(ctx context.Context, size int, location string) (*Volume, error) {
 	// Get location
 	loc, _, err := c.hcloud.Location.GetByName(ctx, location)
@@ -206,15 +241,19 @@ func (c *Client) CreateVolume(ctx context.Context, size int, location string) (*
 		return nil, fmt.Errorf("location %s not found", location)
 	}
 
-	// Generate unique volume name
-	volumeName := fmt.Sprintf("dockbridge-volume-%d", time.Now().Unix())
+	// Generate unique volume name with Docker data identifier
+	volumeName := fmt.Sprintf("dockbridge-docker-data-%d", time.Now().Unix())
 
-	// Create volume
+	// Create volume with ext4 filesystem for Docker data
 	opts := hcloud.VolumeCreateOpts{
 		Name:     volumeName,
 		Size:     size,
 		Location: loc,
 		Format:   hcloud.Ptr("ext4"),
+		Labels: map[string]string{
+			"purpose":    "docker-data",
+			"created-by": "dockbridge",
+		},
 	}
 
 	result, _, err := c.hcloud.Volume.Create(ctx, opts)
@@ -223,8 +262,7 @@ func (c *Client) CreateVolume(ctx context.Context, size int, location string) (*
 	}
 
 	// Wait for volume creation to complete
-	_, errCh := c.hcloud.Action.WatchProgress(ctx, result.Action)
-	if err := <-errCh; err != nil {
+	if err := c.hcloud.Action.WaitFor(ctx, result.Action); err != nil {
 		return nil, errors.Wrap(err, "failed to wait for volume creation")
 	}
 
@@ -249,48 +287,8 @@ func (c *Client) FindOrCreateDockerVolume(ctx context.Context, location string) 
 		}
 	}
 
-	// No available volume found, create a new one with Docker data naming
-	return c.createDockerDataVolume(ctx, location)
-}
-
-// createDockerDataVolume creates a new volume specifically for Docker data
-func (c *Client) createDockerDataVolume(ctx context.Context, location string) (*Volume, error) {
-	// Get location
-	loc, _, err := c.hcloud.Location.GetByName(ctx, location)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get location")
-	}
-	if loc == nil {
-		return nil, fmt.Errorf("location %s not found", location)
-	}
-
-	// Generate unique volume name with Docker data identifier
-	volumeName := fmt.Sprintf("dockbridge-docker-data-%d", time.Now().Unix())
-
-	// Create volume with ext4 filesystem for Docker data
-	opts := hcloud.VolumeCreateOpts{
-		Name:     volumeName,
-		Size:     c.config.VolumeSize,
-		Location: loc,
-		Format:   hcloud.Ptr("ext4"),
-		Labels: map[string]string{
-			"purpose":    "docker-data",
-			"created-by": "dockbridge",
-		},
-	}
-
-	result, _, err := c.hcloud.Volume.Create(ctx, opts)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create volume")
-	}
-
-	// Wait for volume creation to complete
-	_, errCh := c.hcloud.Action.WatchProgress(ctx, result.Action)
-	if err := <-errCh; err != nil {
-		return nil, errors.Wrap(err, "failed to wait for volume creation")
-	}
-
-	return convertVolume(result.Volume), nil
+	// No available volume found, create a new one
+	return c.CreateVolume(ctx, c.config.VolumeSize, location)
 }
 
 // AttachVolume attaches a volume to a server
