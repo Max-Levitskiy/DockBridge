@@ -95,9 +95,29 @@ tasks:
     cmds:
       - govulncheck ./...
 
+  security:install:trivy:
+    desc: Install trivy if not present
+    status:
+      - which trivy
+    cmds:
+      - |
+        echo "Installing trivy..."
+        if [ "$(uname)" = "Darwin" ]; then
+          brew install aquasecurity/trivy/trivy
+        else
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $(go env GOPATH)/bin
+        fi
+        echo "✅ trivy installed"
+
+  security:trivy:
+    desc: Run trivy filesystem scan
+    deps: [security:install:trivy]
+    cmds:
+      - trivy fs --severity CRITICAL,HIGH .
+
   security:
-    desc: Run security
-    deps: [security:gosec, security:govulncheck]
+    desc: Run security checks (gosec, govulncheck, trivy)
+    deps: [security:gosec, security:govulncheck, security:trivy]
 
   check:
     desc: Run all checks (fmt, lint, security, test) - for pre-commit
