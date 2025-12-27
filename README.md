@@ -203,6 +203,8 @@ Hetzner offers the best price-to-performance ratio for cloud servers in Europe/U
 - Simple, developer-friendly API
 - Block storage for persistent volumes
 
+👉 **[Sign up for Hetzner Cloud](https://hetzner.cloud/?ref=byqyc75CTqcH)** and get **€20 free credit** to try DockBridge!
+
 ### How does state persist when servers are destroyed?
 
 DockBridge creates a persistent block volume that mounts at `/var/lib/docker`. When a server is destroyed, the volume remains. When a new server is provisioned, it reattaches the same volume, restoring all your images, containers, and volumes.
