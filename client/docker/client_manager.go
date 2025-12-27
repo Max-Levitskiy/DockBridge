@@ -783,21 +783,3 @@ func (dcm *dockerClientManagerImpl) InterceptDockerResponse(response []byte) ([]
 	// Return response unchanged for now
 	return response, nil
 }
-
-// processPortMappings processes port mappings and handles conflicts
-func (dcm *dockerClientManagerImpl) processPortMappings(ports map[string][]PortBinding) (map[string][]PortBinding, error) {
-	// This is a simplified implementation
-	// In a full implementation, this would:
-	// 1. Check each port for availability
-	// 2. Use the port conflict resolver to handle conflicts
-	// 3. Update port mappings with actual assigned ports
-	// 4. Return modified port mappings
-
-	dcm.logger.WithFields(map[string]interface{}{
-		"port_count": len(ports),
-	}).Debug("Processing port mappings for conflicts")
-
-	// For now, return nil to indicate no modifications
-	// This preserves the original behavior while providing the infrastructure
-	return nil, nil
-}

@@ -13,12 +13,12 @@ import (
 
 // LoggerInterface defines the interface for logging operations
 type LoggerInterface interface {
-	Debug(msg string, args ...interface{})
-	Info(msg string, args ...interface{})
-	Warn(msg string, args ...interface{})
-	Error(msg string, args ...interface{})
-	Fatal(msg string, args ...interface{})
-	WithFields(fields map[string]interface{}) *Logger
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+	Fatal(msg string, args ...any)
+	WithFields(fields map[string]any) *Logger
 }
 
 // Level represents the logging level
@@ -253,10 +253,7 @@ func (l *Logger) Fatal(msg string, args ...interface{}) {
 }
 
 // Global logger instance
-var (
-	defaultLogger = NewDefault()
-	once          sync.Once
-)
+var defaultLogger = NewDefault()
 
 // SetDefaultLogger sets the global default logger
 func SetDefaultLogger(logger *Logger) {
@@ -332,10 +329,8 @@ func (l *Logger) WarnWithFields(msg string, fields map[string]interface{}) {
 // ErrorWithFields logs an error message with fields
 func (l *Logger) ErrorWithFields(msg string, err error, fields map[string]interface{}) {
 	combinedFields := make(map[string]interface{})
-	if fields != nil {
-		for k, v := range fields {
-			combinedFields[k] = v
-		}
+	for k, v := range fields {
+		combinedFields[k] = v
 	}
 	if err != nil {
 		combinedFields["error"] = err.Error()
@@ -351,10 +346,8 @@ func (l *Logger) ErrorWithFields(msg string, err error, fields map[string]interf
 // FatalWithFields logs a fatal message with fields
 func (l *Logger) FatalWithFields(msg string, err error, fields map[string]interface{}) {
 	combinedFields := make(map[string]interface{})
-	if fields != nil {
-		for k, v := range fields {
-			combinedFields[k] = v
-		}
+	for k, v := range fields {
+		combinedFields[k] = v
 	}
 	if err != nil {
 		combinedFields["error"] = err.Error()

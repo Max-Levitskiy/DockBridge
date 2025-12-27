@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/assert"
@@ -20,14 +19,14 @@ type MockDockerClient struct {
 	mock.Mock
 }
 
-func (m *MockDockerClient) ContainerList(ctx context.Context, options container.ListOptions) ([]types.Container, error) {
+func (m *MockDockerClient) ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error) {
 	args := m.Called(ctx, options)
-	return args.Get(0).([]types.Container), args.Error(1)
+	return args.Get(0).([]container.Summary), args.Error(1)
 }
 
-func (m *MockDockerClient) ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error) {
+func (m *MockDockerClient) ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error) {
 	args := m.Called(ctx, containerID)
-	return args.Get(0).(types.ContainerJSON), args.Error(1)
+	return args.Get(0).(container.InspectResponse), args.Error(1)
 }
 
 // createTestLogger creates a simple test logger that discards output
@@ -58,8 +57,8 @@ func (m *MockEventHandler) OnContainerRemoved(containerID string) error {
 }
 
 // Test helper functions
-func createTestContainer(id, name, image string, ports []types.Port) types.Container {
-	return types.Container{
+func createTestContainer(id, name, image string, ports []container.Port) container.Summary {
+	return container.Summary{
 		ID:      id,
 		Names:   []string{"/" + name},
 		Image:   image,
@@ -70,13 +69,13 @@ func createTestContainer(id, name, image string, ports []types.Port) types.Conta
 	}
 }
 
-func createTestContainerJSON(id, name, image string, portBindings nat.PortMap) types.ContainerJSON {
-	return types.ContainerJSON{
-		ContainerJSONBase: &types.ContainerJSONBase{
+func createTestContainerJSON(id, name, image string, portBindings nat.PortMap) container.InspectResponse {
+	return container.InspectResponse{
+		ContainerJSONBase: &container.ContainerJSONBase{
 			ID:      id,
 			Name:    "/" + name,
 			Created: time.Now().Format(time.RFC3339Nano),
-			State: &types.ContainerState{
+			State: &container.State{
 				Status:  "running",
 				Running: true,
 			},
@@ -85,8 +84,8 @@ func createTestContainerJSON(id, name, image string, portBindings nat.PortMap) t
 			Image:  image,
 			Labels: map[string]string{"test": "true"},
 		},
-		NetworkSettings: &types.NetworkSettings{
-			NetworkSettingsBase: types.NetworkSettingsBase{
+		NetworkSettings: &container.NetworkSettings{
+			NetworkSettingsBase: container.NetworkSettingsBase{
 				Ports: portBindings,
 			},
 		},
@@ -103,7 +102,7 @@ func TestContainerMonitor_BasicLifecycle(t *testing.T) {
 	assert.False(t, monitor.(*containerMonitorImpl).running)
 
 	// Mock initial container list (empty)
-	mockClient.On("ContainerList", mock.Anything, mock.Anything).Return([]types.Container{}, nil)
+	mockClient.On("ContainerList", mock.Anything, mock.Anything).Return([]container.Summary{}, nil)
 
 	// Start monitor
 	ctx, cancel := context.WithCancel(context.Background())
@@ -158,11 +157,11 @@ func TestContainerMonitor_ListRunningContainers(t *testing.T) {
 	monitor := NewContainerMonitor(mockClient, mockLogger)
 
 	// Create test containers
-	testContainers := []types.Container{
-		createTestContainer("container1", "nginx", "nginx:latest", []types.Port{
+	testContainers := []container.Summary{
+		createTestContainer("container1", "nginx", "nginx:latest", []container.Port{
 			{PrivatePort: 80, PublicPort: 8080, Type: "tcp", IP: "0.0.0.0"},
 		}),
-		createTestContainer("container2", "redis", "redis:latest", []types.Port{
+		createTestContainer("container2", "redis", "redis:latest", []container.Port{
 			{PrivatePort: 6379, PublicPort: 6379, Type: "tcp", IP: "0.0.0.0"},
 		}),
 	}
@@ -216,18 +215,18 @@ func TestContainerMonitor_GetContainer(t *testing.T) {
 	mockClient.On("ContainerInspect", mock.Anything, "container1").Return(testContainerJSON, nil)
 
 	ctx := context.Background()
-	container, err := monitor.GetContainer(ctx, "container1")
+	c, err := monitor.GetContainer(ctx, "container1")
 
 	require.NoError(t, err)
-	assert.Equal(t, "container1", container.ID)
-	assert.Equal(t, "nginx", container.Name)
-	assert.Equal(t, "nginx:latest", container.Image)
-	assert.Equal(t, "running", container.Status)
-	assert.Len(t, container.Ports, 2)
+	assert.Equal(t, "container1", c.ID)
+	assert.Equal(t, "nginx", c.Name)
+	assert.Equal(t, "nginx:latest", c.Image)
+	assert.Equal(t, "running", c.Status)
+	assert.Len(t, c.Ports, 2)
 
 	// Check port mappings
 	portMap := make(map[int]int) // containerPort -> hostPort
-	for _, port := range container.Ports {
+	for _, port := range c.Ports {
 		portMap[port.ContainerPort] = port.HostPort
 	}
 	assert.Equal(t, 8080, portMap[80])

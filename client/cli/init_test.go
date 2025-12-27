@@ -6,9 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Define a variable to hold the original function for testing
-var originalInitFunc func(bool) error
-
 func TestInitCommand(t *testing.T) {
 	// Check that the command has the expected properties
 	assert.Equal(t, "init", initCmd.Name())

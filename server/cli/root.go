@@ -42,7 +42,5 @@ func initConfig() {
 
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err == nil {
-		// Config file found and successfully parsed
-	}
+	_ = viper.ReadInConfig() // Ignore errors if config file is not found
 }

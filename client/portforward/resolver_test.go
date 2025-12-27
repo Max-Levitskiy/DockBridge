@@ -220,11 +220,12 @@ func TestPortConflictResolver_IncrementStrategy_CommonPorts(t *testing.T) {
 			assert.True(t, resolver.IsPortAvailable(resolvedPort))
 
 			// For common ports, the resolved port should be in the expected range or follow the pattern
-			if tc.requestedPort == 80 {
+			switch tc.requestedPort {
+			case 80:
 				assert.GreaterOrEqual(t, resolvedPort, 8080)
-			} else if tc.requestedPort == 443 {
+			case 443:
 				assert.GreaterOrEqual(t, resolvedPort, 8443)
-			} else {
+			default:
 				assert.Greater(t, resolvedPort, tc.requestedPort)
 			}
 		})

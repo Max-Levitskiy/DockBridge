@@ -45,7 +45,7 @@ func startClient(configPath string) error {
 
 	// Validate required configuration
 	if cfg.Hetzner.APIToken == "" {
-		return fmt.Errorf("Hetzner API token is required. Please set it in the configuration file or via HETZNER_API_TOKEN environment variable")
+		return fmt.Errorf("hetzner API token is required: set it in the configuration file or via HETZNER_API_TOKEN environment variable")
 	}
 
 	// Create context with cancellation

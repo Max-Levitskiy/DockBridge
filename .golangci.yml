@@ -1,0 +1,40 @@
+# golangci-lint v2 configuration
+# https://golangci-lint.run/usage/configuration/
+#
+# NOTE: errcheck is temporarily disabled for initial open source launch.
+# TODO: Re-enable errcheck and fix issues in follow-up PR
+# See: https://github.com/dockbridge/dockbridge/issues/XX
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    # Core linters
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    # Temporarily disabled - too many false positives for cleanup code
+    # - errcheck
+
+linters-settings:
+  staticcheck:
+    checks:
+      - "all"
+      - "-SA1019" # Ignore deprecated API warnings (Docker SDK types - will update separately)
+      - "-ST1005" # Ignore error string capitalization (user-facing messages are intentional)
+      - "-QF1003" # Ignore "could use tagged switch" suggestions
+      - "-S1031"  # Ignore unnecessary nil check warnings
+      - "-SA9003" # Ignore empty branch warnings
+
+issues:
+  exclude-rules:
+    # Less strict in test files
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: "SA1019"

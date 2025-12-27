@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/pkg/errors"
 )
@@ -56,8 +55,8 @@ type PortMapping struct {
 
 // ContainerAPIClient defines the minimal Docker API interface needed for container monitoring
 type ContainerAPIClient interface {
-	ContainerList(ctx context.Context, options container.ListOptions) ([]types.Container, error)
-	ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error)
+	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
+	ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error)
 }
 
 // containerMonitorImpl implements ContainerMonitor
@@ -337,7 +336,7 @@ func (cm *containerMonitorImpl) checkContainerChanges() error {
 }
 
 // convertToContainerInfo converts Docker API container to ContainerInfo
-func (cm *containerMonitorImpl) convertToContainerInfo(c types.Container) (*ContainerInfo, error) {
+func (cm *containerMonitorImpl) convertToContainerInfo(c container.Summary) (*ContainerInfo, error) {
 	// Extract container name (remove leading slash)
 	name := ""
 	if len(c.Names) > 0 {
@@ -370,17 +369,17 @@ func (cm *containerMonitorImpl) convertToContainerInfo(c types.Container) (*Cont
 }
 
 // convertInspectToContainerInfo converts Docker inspect result to ContainerInfo
-func (cm *containerMonitorImpl) convertInspectToContainerInfo(containerJSON types.ContainerJSON) (*ContainerInfo, error) {
+func (cm *containerMonitorImpl) convertInspectToContainerInfo(resp container.InspectResponse) (*ContainerInfo, error) {
 	// Extract container name (remove leading slash)
-	name := containerJSON.Name
+	name := resp.Name
 	if len(name) > 0 && name[0] == '/' {
 		name = name[1:]
 	}
 
 	// Convert port mappings from NetworkSettings
 	ports := make([]PortMapping, 0)
-	if containerJSON.NetworkSettings != nil && containerJSON.NetworkSettings.Ports != nil {
-		for portProto, bindings := range containerJSON.NetworkSettings.Ports {
+	if resp.NetworkSettings != nil && resp.NetworkSettings.Ports != nil {
+		for portProto, bindings := range resp.NetworkSettings.Ports {
 			// Parse port and protocol
 			portStr := string(portProto)
 			var containerPort int
@@ -390,7 +389,7 @@ func (cm *containerMonitorImpl) convertInspectToContainerInfo(containerJSON type
 				for _, binding := range bindings {
 					hostPort := 0
 					if binding.HostPort != "" {
-						fmt.Sscanf(binding.HostPort, "%d", &hostPort)
+						_, _ = fmt.Sscanf(binding.HostPort, "%d", &hostPort)
 					}
 
 					ports = append(ports, PortMapping{
@@ -405,18 +404,18 @@ func (cm *containerMonitorImpl) convertInspectToContainerInfo(containerJSON type
 	}
 
 	// Parse created time
-	createdTime, err := time.Parse(time.RFC3339Nano, containerJSON.Created)
+	createdTime, err := time.Parse(time.RFC3339Nano, resp.Created)
 	if err != nil {
 		createdTime = time.Now() // Fallback to current time
 	}
 
 	return &ContainerInfo{
-		ID:      containerJSON.ID,
+		ID:      resp.ID,
 		Name:    name,
-		Image:   containerJSON.Config.Image,
-		Status:  containerJSON.State.Status,
+		Image:   resp.Config.Image,
+		Status:  resp.State.Status,
 		Ports:   ports,
-		Labels:  containerJSON.Config.Labels,
+		Labels:  resp.Config.Labels,
 		Created: createdTime,
 	}, nil
 }

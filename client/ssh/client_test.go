@@ -3,7 +3,6 @@ package ssh
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -26,7 +25,7 @@ func TestClient_Integration(t *testing.T) {
 	}
 
 	sshPort := 22
-	fmt.Sscanf(sshPortStr, "%d", &sshPort)
+	_, _ = fmt.Sscanf(sshPortStr, "%d", &sshPort)
 
 	// Create client config
 	config := &ClientConfig{
@@ -46,7 +45,7 @@ func TestClient_Integration(t *testing.T) {
 	if err != nil {
 		t.Skipf("Skipping SSH client integration tests: could not connect: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Test IsConnected
 	assert.True(t, client.IsConnected())
@@ -60,42 +59,6 @@ func TestClient_Integration(t *testing.T) {
 	err = client.Close()
 	require.NoError(t, err)
 	assert.False(t, client.IsConnected())
-}
-
-// Mock SSH server for testing
-type mockSSHServer struct {
-	listener net.Listener
-	done     chan struct{}
-}
-
-func newMockSSHServer(t *testing.T) (*mockSSHServer, string) {
-	// Start a TCP server that just accepts connections but doesn't do anything with them
-	// This is enough to test the tunnel connection logic without needing SSH authentication
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-
-	server := &mockSSHServer{
-		listener: listener,
-		done:     make(chan struct{}),
-	}
-
-	go func() {
-		defer close(server.done)
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			conn.Close() // Just close it immediately, we only care about the connection attempt
-		}
-	}()
-
-	return server, listener.Addr().String()
-}
-
-func (s *mockSSHServer) close() {
-	s.listener.Close()
-	<-s.done
 }
 
 // TestTunnel_Mock tests the tunnel functionality with a mock server

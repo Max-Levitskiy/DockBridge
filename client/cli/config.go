@@ -3,12 +3,10 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/dockbridge/dockbridge/client/config"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var configCmd = &cobra.Command{
@@ -229,27 +227,5 @@ func setConfigValue(configPath, key, value string) error {
 	}
 
 	fmt.Println("Configuration updated successfully!")
-	return nil
-}
-
-// saveConfig saves the configuration to a file
-func saveConfig(path string, cfg interface{}) error {
-	// Convert config to YAML
-	yamlData, err := yaml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to marshal configuration to YAML: %w", err)
-	}
-
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", dir, err)
-	}
-
-	// Write to file
-	if err := os.WriteFile(path, yamlData, 0644); err != nil {
-		return fmt.Errorf("failed to write configuration to %s: %w", path, err)
-	}
-
 	return nil
 }
