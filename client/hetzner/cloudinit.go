@@ -392,7 +392,7 @@ func generateDockerConfigurationScript(config *CloudInitConfig) string {
         "max-size": "10m",
         "max-file": "3"
       },
-      "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:` + fmt.Sprintf("%d", config.DockerAPIPort) + `"],
+      "hosts": ["unix:///var/run/docker.sock", "tcp://127.0.0.1:` + fmt.Sprintf("%d", config.DockerAPIPort) + `"],
       "tls": false,
       "experimental": false,
       "live-restore": true,
