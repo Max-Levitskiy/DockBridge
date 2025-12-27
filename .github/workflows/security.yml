@@ -31,12 +31,12 @@ jobs:
           cache: true
 
       - name: Run gosec
-        uses: securecodewarrior/github-action-gosec@v1
+        uses: securego/gosec@master
         with:
           args: "-fmt sarif -out gosec.sarif ./..."
 
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: gosec.sarif
         if: always()
@@ -90,7 +90,7 @@ jobs:
           severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-results.sarif"
         if: always()
