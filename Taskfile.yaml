@@ -31,10 +31,20 @@ tasks:
 
   lint:
     desc: Run golangci-lint (only if Go files changed)
+    deps: [golangci-lint:install]
     sources:
       - ./**/*.go
     cmds:
       - golangci-lint run ./...
+
+  golangci-lint:install:
+    desc: Install golangci-lint if not present
+    status:
+      - which golangci-lint
+    cmds:
+      - echo "Installing golangci-lint..."
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin
+      - echo "✅ golangci-lint installed"
 
   fmt:
     desc: Format code
