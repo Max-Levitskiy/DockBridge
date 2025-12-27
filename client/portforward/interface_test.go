@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/dockbridge/dockbridge/client/monitor"
-	"github.com/dockbridge/dockbridge/shared/config"
 	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/dockbridge/dockbridge/shared/config"
 )
 
 // TestPortForwardManagerImplementsContainerEventHandler verifies that PortForwardManager

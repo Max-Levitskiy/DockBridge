@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/dockbridge/dockbridge/client/monitor"
-	"github.com/dockbridge/dockbridge/shared/config"
 	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/dockbridge/dockbridge/shared/config"
 )
 
 // PortForwardManager manages the lifecycle of port forwards

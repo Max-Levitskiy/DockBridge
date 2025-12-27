@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/dockbridge/dockbridge/client/activity"
+	"github.com/dockbridge/dockbridge/pkg/logger"
 	"github.com/dockbridge/dockbridge/server"
 	"github.com/dockbridge/dockbridge/shared/config"
-	"github.com/dockbridge/dockbridge/pkg/logger"
 )
 
 // Manager handles server lifecycle based on activity tracking
