@@ -35,3 +35,4 @@ dockbridge
 test-lifecycle
 ~
 *.log
+*.DS_Store
