@@ -30,15 +30,21 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Run gosec
+      - name: Run gosec (root)
         uses: securego/gosec@master
         with:
-          args: "-fmt sarif -out gosec.sarif ./..."
+          args: "-exclude=G104 -exclude-dir=ssh-docker-proxy -fmt sarif -out gosec-root.sarif ./..."
+
+      - name: Run gosec (ssh-docker-proxy)
+        uses: securego/gosec@master
+        with:
+          args: "-exclude=G104 -fmt sarif -out gosec-proxy.sarif ./..."
+        working-directory: ./ssh-docker-proxy
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: gosec.sarif
+          sarif_file: .
         if: always()
 
   govulncheck:
