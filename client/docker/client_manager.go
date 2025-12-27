@@ -446,7 +446,7 @@ mkdir -p /etc/systemd/system/docker.service.d
 cat > /etc/systemd/system/docker.service.d/override.conf << EOF
 [Service]
 ExecStart=
-ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2376
+ExecStart=/usr/bin/dockerd -H fd:// -H tcp://127.0.0.1:2376
 EOF
 
 # Reload systemd and restart Docker
