@@ -62,8 +62,11 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the lifecycle manager
+// Stop stops the lifecycle manager and destroys any running servers
 func (m *Manager) Stop() error {
+	m.logger.Info("Stopping lifecycle manager...")
+
+	// Cancel main context to stop monitoring loop
 	if m.cancel != nil {
 		m.cancel()
 	}
@@ -76,6 +79,44 @@ func (m *Manager) Stop() error {
 		m.logger.WithFields(map[string]any{
 			"error": err.Error(),
 		}).Error("Failed to stop activity tracker")
+	}
+
+	// Create a new context for cleanup since the main one is cancelled
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Check for running servers one last time
+	m.logger.Info("Checking for remaining servers to cleanup...")
+	servers, err := m.serverManager.ListServers(cleanupCtx)
+	if err != nil {
+		m.logger.WithFields(map[string]any{
+			"error": err.Error(),
+		}).Error("Failed to list servers during shutdown")
+		return fmt.Errorf("failed to list servers during shutdown: %w", err)
+	}
+
+	// destroy any running servers
+	for _, srv := range servers {
+		if srv.Status == server.StatusRunning {
+			m.logger.WithFields(map[string]any{
+				"server_id":   srv.ID,
+				"server_name": srv.Name,
+			}).Info("Running server found during shutdown, destroying...")
+
+			if err := m.serverManager.DestroyServer(cleanupCtx, srv.ID); err != nil {
+				if isServerNotFoundError(err) {
+					continue
+				}
+				m.logger.WithFields(map[string]any{
+					"server_id": srv.ID,
+					"error":     err.Error(),
+				}).Error("Failed to destroy server during shutdown")
+			} else {
+				m.logger.WithFields(map[string]any{
+					"server_id": srv.ID,
+				}).Info("Server destroyed successfully during shutdown")
+			}
+		}
 	}
 
 	m.logger.Info("Lifecycle manager stopped")
