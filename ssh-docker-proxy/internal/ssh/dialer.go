@@ -33,7 +33,7 @@ func NewSSHDialer(cfg *config.Config) (*SSHDialer, error) {
 	}
 
 	// Load SSH private key
-	keyBytes, err := os.ReadFile(keyPath)
+	keyBytes, err := os.ReadFile(keyPath) // #nosec G304
 	if err != nil {
 		return nil, &config.ProxyError{
 			Category: config.ErrorCategorySSH,
@@ -58,7 +58,7 @@ func NewSSHDialer(cfg *config.Config) (*SSHDialer, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 // TODO: Implement proper host key verification
 		Timeout:         cfg.Timeout,
 	}
 

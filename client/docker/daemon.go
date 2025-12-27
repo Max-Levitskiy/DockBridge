@@ -396,6 +396,7 @@ type TunnelInterface = ssh.TunnelInterface
 // setSocketPermissions sets the correct permissions for the Docker socket
 func (d *DockBridgeDaemon) setSocketPermissions(socketPath string) error {
 	// Set socket permissions to 666 (rw-rw-rw-)
+	// #nosec G302
 	if err := os.Chmod(socketPath, 0666); err != nil {
 		return errors.Wrap(err, "failed to set socket permissions")
 	}

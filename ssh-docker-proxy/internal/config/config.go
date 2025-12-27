@@ -124,7 +124,7 @@ func LoadFromFile(filename string) (*Config, error) {
 	}
 
 	// Read file
-	data, err := os.ReadFile(filename)
+	data, err := os.ReadFile(filename) // #nosec G304
 	if err != nil {
 		return nil, &ProxyError{
 			Category: ErrorCategoryConfig,

@@ -187,7 +187,7 @@ func calculateBackoff(attempt int, config *RetryConfig) time.Duration {
 
 	// Apply jitter
 	if config.Jitter > 0 {
-		jitter := rand.Float64() * config.Jitter * backoff
+		jitter := rand.Float64() * config.Jitter * backoff // #nosec G404
 		backoff = backoff - (config.Jitter * backoff / 2) + jitter
 	}
 

@@ -16,13 +16,13 @@ func InitializeDefaultConfig() error {
 	configDir := filepath.Join(homeDir, ".dockbridge")
 
 	// Create the config directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	// Create configs subdirectory
 	configsDir := filepath.Join(configDir, "configs")
-	if err := os.MkdirAll(configsDir, 0755); err != nil {
+	if err := os.MkdirAll(configsDir, 0700); err != nil {
 		return fmt.Errorf("failed to create configs directory: %w", err)
 	}
 
@@ -129,7 +129,7 @@ logging:
   output: "stdout"
 `
 
-	return os.WriteFile(path, []byte(content), 0644)
+	return os.WriteFile(path, []byte(content), 0600)
 }
 
 // createDefaultServerConfig creates the default server configuration file
@@ -172,7 +172,7 @@ logging:
   output: "stdout"
 `
 
-	return os.WriteFile(path, []byte(content), 0644)
+	return os.WriteFile(path, []byte(content), 0600)
 }
 
 // GetDefaultConfigPath returns the default configuration file path for the given config type

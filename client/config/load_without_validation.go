@@ -48,7 +48,7 @@ func (m *Manager) SaveConfig(configPath string) error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(configPath, yamlData, 0644); err != nil {
+	if err := os.WriteFile(configPath, yamlData, 0600); err != nil {
 		return fmt.Errorf("failed to write configuration to %s: %w", configPath, err)
 	}
 

@@ -234,6 +234,7 @@ func (m *Manager) validateDocker() error {
 
 		// Test if we can write to the directory by creating a temporary file
 		tempFile := filepath.Join(dir, ".dockbridge-test")
+		// #nosec G304
 		if file, err := os.Create(tempFile); err != nil {
 			return fmt.Errorf("cannot write to directory for docker socket path '%s': %s", docker.SocketPath, dir)
 		} else {

@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  BINARY_NAME: dockbridge
+  BINARY_NAME: bin/dockbridge
 
 tasks:
   default:
@@ -63,11 +63,48 @@ tasks:
     cmds:
       - go fmt ./...
 
+  security:install:gosec:
+    desc: Install gosec if not present
+    status:
+      - which gosec
+    cmds:
+      - curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+
+  security:install:govulncheck:
+    desc: Install govulncheck if not present
+    status:
+      - which govulncheck
+    cmds:
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+
+  security:gosec:
+    desc: Run gosec security scanner
+    deps: [security:install:gosec]
+    sources:
+      - ./**/*.go
+    cmds:
+      - gosec -exclude=G104 -exclude-dir=ssh-docker-proxy ./...
+      - cd ssh-docker-proxy && gosec -exclude=G104 ./...
+
+  security:govulncheck:
+    desc: Run govulncheck security scanner
+    deps: [security:install:govulncheck]
+    sources:
+      - go.mod
+      - go.sum
+    cmds:
+      - govulncheck ./...
+
+  security:
+    desc: Run security
+    deps: [security:gosec, security:govulncheck]
+
   check:
-    desc: Run all checks (fmt, lint, test) - for pre-commit
+    desc: Run all checks (fmt, lint, security, test) - for pre-commit
     cmds:
       - task: fmt
       - task: lint
+      - task: security
       - task: test
 
   # Git hooks

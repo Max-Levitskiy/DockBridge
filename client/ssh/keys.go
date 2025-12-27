@@ -72,7 +72,7 @@ func (km *keyManagerImpl) GenerateKeys(keyPath string, bits int) error {
 	}
 
 	// Write private key to file
-	privateKeyFile, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, DefaultKeyPermissions)
+	privateKeyFile, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, DefaultKeyPermissions) // #nosec G304
 	if err != nil {
 		return errors.Wrapf(err, "failed to create private key file %s", keyPath)
 	}
@@ -90,7 +90,7 @@ func (km *keyManagerImpl) GenerateKeys(keyPath string, bits int) error {
 
 	// Write public key to file
 	publicKeyPath := keyPath + ".pub"
-	publicKeyFile, err := os.OpenFile(publicKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, DefaultPublicKeyPermissions)
+	publicKeyFile, err := os.OpenFile(publicKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, DefaultPublicKeyPermissions) // #nosec G304
 	if err != nil {
 		return errors.Wrapf(err, "failed to create public key file %s", publicKeyPath)
 	}
@@ -112,7 +112,7 @@ func (km *keyManagerImpl) LoadPublicKey(keyPath string) (ssh.PublicKey, error) {
 	}
 
 	// Read public key file
-	publicKeyBytes, err := os.ReadFile(keyPath)
+	publicKeyBytes, err := os.ReadFile(keyPath) // #nosec G304
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read public key file %s", keyPath)
 	}
@@ -129,7 +129,7 @@ func (km *keyManagerImpl) LoadPublicKey(keyPath string) (ssh.PublicKey, error) {
 // LoadPrivateKey loads a private key from a file
 func (km *keyManagerImpl) LoadPrivateKey(keyPath string) (ssh.Signer, error) {
 	// Read private key file
-	privateKeyBytes, err := os.ReadFile(keyPath)
+	privateKeyBytes, err := os.ReadFile(keyPath) // #nosec G304
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read private key file %s", keyPath)
 	}
@@ -194,7 +194,7 @@ func GetPublicKeyString(keyPath string) (string, error) {
 	}
 
 	// Read public key file
-	publicKeyBytes, err := os.ReadFile(keyPath)
+	publicKeyBytes, err := os.ReadFile(keyPath) // #nosec G304
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to read public key file %s", keyPath)
 	}

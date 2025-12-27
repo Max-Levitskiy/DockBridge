@@ -506,6 +506,7 @@ echo "$(date): DockBridge server setup completed successfully"
 // readOrGenerateSSHKey reads existing SSH key or generates a new one
 func (dcm *dockerClientManagerImpl) readOrGenerateSSHKey(privateKeyPath, publicKeyPath string) ([]byte, error) {
 	// Try to read existing public key
+	// #nosec G304
 	if publicKeyBytes, err := os.ReadFile(publicKeyPath); err == nil {
 		return publicKeyBytes, nil
 	}
@@ -521,7 +522,7 @@ func (dcm *dockerClientManagerImpl) readOrGenerateSSHKey(privateKeyPath, publicK
 	}
 
 	// Read the newly generated public key
-	return os.ReadFile(publicKeyPath)
+	return os.ReadFile(publicKeyPath) // #nosec G304
 }
 
 // generateSSHKey generates an SSH key pair

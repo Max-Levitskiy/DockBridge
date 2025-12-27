@@ -52,7 +52,7 @@ func initializeConfig(force bool) error {
 
 	// Create config directory
 	configDir := filepath.Dir(clientConfigPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -158,12 +158,12 @@ func saveClientConfig(path string, cfg any) error {
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
 	// Write to file
-	if err := os.WriteFile(path, yamlData, 0644); err != nil {
+	if err := os.WriteFile(path, yamlData, 0600); err != nil {
 		return fmt.Errorf("failed to write configuration to %s: %w", path, err)
 	}
 

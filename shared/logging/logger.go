@@ -28,6 +28,7 @@ func LoadLoggerConfig(configPath string) (*logger.Config, error) {
 	}
 
 	// Read config file
+	// #nosec G304
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
