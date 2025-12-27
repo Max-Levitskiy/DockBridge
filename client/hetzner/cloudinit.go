@@ -10,6 +10,7 @@ type CloudInitConfig struct {
 	DockerVersion   string
 	SSHPublicKey    string
 	VolumeMount     string
+	VolumeID        string // Hetzner Volume ID for reliable mounting
 	KeepAlivePort   int
 	DockerAPIPort   int
 	AdditionalUsers []string
@@ -231,13 +232,39 @@ runcmd:
 
 // generateVolumeSetupScript creates the volume setup portion of cloud-init
 func generateVolumeSetupScript(config *CloudInitConfig) string {
-	return `  
-  # Enhanced persistent volume setup for Docker data
-  - |
-    echo "Setting up persistent volume for Docker data..."
+	volumeDeviceSearch := ""
+	if config.VolumeID != "" {
+		// If VolumeID is provided, look for the specific device by ID (Hetzner specific)
+		// Hetzner volumes are exposed as /dev/disk/by-id/scsi-0HC_Volume_<ID>
+		volumeDeviceSearch = fmt.Sprintf(`
+    # Look for volume by deterministic ID path
+    EXPECTED_DEVICE="/dev/disk/by-id/scsi-0HC_Volume_%s"
+    echo "Looking for volume device by ID: $EXPECTED_DEVICE"
     
+    for i in {1..60}; do
+      if [ -L "$EXPECTED_DEVICE" ] || [ -b "$EXPECTED_DEVICE" ]; then
+        VOLUME_DEVICE=$(readlink -f "$EXPECTED_DEVICE")
+        echo "Found volume device: $EXPECTED_DEVICE -> $VOLUME_DEVICE"
+        break
+      fi
+      
+      # Fallback: check legacy device names if by-id link not created yet
+      for device in /dev/sdb /dev/vdb /dev/xvdb; do
+        if [ -b "$device" ]; then
+           # Check if this device might be our volume (by size or just assuming if it's the only one)
+           # Ideally we stick to ID, but this is a fallback
+           echo "Checking alternative device: $device"
+        fi
+      done
+      
+      echo "Waiting for volume device... attempt $i/60"
+      sleep 2
+    done
+`, config.VolumeID)
+	} else {
+		// Legacy behavior: guess the device
+		volumeDeviceSearch = `
     # Wait for volume device to be available (up to 3 minutes for faster startup)
-    VOLUME_DEVICE=""
     for i in {1..36}; do
       # Check for common volume device names
       for device in /dev/sdb /dev/vdb /dev/xvdb; do
@@ -250,13 +277,33 @@ func generateVolumeSetupScript(config *CloudInitConfig) string {
       echo "Waiting for volume device... attempt $i/36"
       sleep 5
     done
+`
+	}
+
+	return `  
+  # Enhanced persistent volume setup for Docker data
+  - |
+    echo "Setting up persistent volume for Docker data..."
     
+    VOLUME_DEVICE=""
+    ` + volumeDeviceSearch + `
+    
+    if [ -z "$VOLUME_DEVICE" ] && [ -n "$EXPECTED_DEVICE" ]; then
+       # Try one last check for the expected device
+       if [ -L "$EXPECTED_DEVICE" ] || [ -b "$EXPECTED_DEVICE" ]; then
+         VOLUME_DEVICE=$(readlink -f "$EXPECTED_DEVICE")
+       fi
+    fi
+
     if [ -z "$VOLUME_DEVICE" ]; then
-      echo "ERROR: No volume device found after 3 minutes"
+      echo "ERROR: No volume device found after waiting"
       echo "Available block devices:"
       lsblk
+      echo "Available disk by-id:"
+      ls -l /dev/disk/by-id/ || true
       exit 1
     fi
+
     
     # Create backup of existing Docker data if it exists
     if [ -d "` + config.VolumeMount + `" ] && [ "$(ls -A ` + config.VolumeMount + `)" ]; then

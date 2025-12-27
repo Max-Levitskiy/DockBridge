@@ -54,6 +54,11 @@ func (lm *LifecycleManager) ProvisionServerWithVolume(ctx context.Context, confi
 		KeepAlivePort: config.KeepAlivePort,
 		DockerAPIPort: config.DockerAPIPort,
 	}
+
+	if volume != nil {
+		cloudInitConfig.VolumeID = fmt.Sprintf("%d", volume.ID)
+	}
+
 	userDataScript := GenerateCloudInitScript(cloudInitConfig)
 
 	// Prepare server configuration

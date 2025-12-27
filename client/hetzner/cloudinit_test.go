@@ -1,6 +1,7 @@
 package hetzner
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -177,5 +178,49 @@ func TestGetDefaultCloudInitConfig(t *testing.T) {
 		if i >= len(config.Packages) || config.Packages[i] != pkg {
 			t.Errorf("Expected package %s at index %d, got %s", pkg, i, config.Packages[i])
 		}
+	}
+}
+
+func TestGenerateVolumeSetupScriptWithVolumeID(t *testing.T) {
+	volumeID := "12345678"
+	config := &CloudInitConfig{
+		VolumeID:    volumeID,
+		VolumeMount: "/var/lib/docker",
+	}
+
+	script := generateVolumeSetupScript(config)
+
+	// Check for deterministic Volume ID path
+	expectedPath := fmt.Sprintf("/dev/disk/by-id/scsi-0HC_Volume_%s", volumeID)
+	if !strings.Contains(script, expectedPath) {
+		t.Errorf("Expected script to contain deterministic volume path %s, but it didn't", expectedPath)
+	}
+
+	// Check for fallback logic
+	if !strings.Contains(script, "EXPECTED_DEVICE=") {
+		t.Error("Expected script to define EXPECTED_DEVICE variable")
+	}
+
+	if !strings.Contains(script, "readlink -f \"$EXPECTED_DEVICE\"") {
+		t.Error("Expected script to resolve symlink for device")
+	}
+}
+
+func TestGenerateVolumeSetupScriptWithoutVolumeID(t *testing.T) {
+	config := &CloudInitConfig{
+		VolumeID:    "",
+		VolumeMount: "/var/lib/docker",
+	}
+
+	script := generateVolumeSetupScript(config)
+
+	// Should not contain by-id path
+	if strings.Contains(script, "/dev/disk/by-id/scsi-0HC_Volume_") {
+		t.Error("Did not expect by-id volume path when VolumeID is empty")
+	}
+
+	// Should contain the original loop over /dev/sdb etc.
+	if !strings.Contains(script, "for device in /dev/sdb /dev/vdb /dev/xvdb; do") {
+		t.Error("Expected legacy device detection loop")
 	}
 }

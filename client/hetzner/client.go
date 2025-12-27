@@ -149,6 +149,7 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 	if config.UserData == "" {
 		// Generate default cloud-init configuration optimized for the selected image
 		cloudInitConfig := GetDefaultCloudInitConfig()
+		cloudInitConfig.VolumeID = config.VolumeID
 		config.UserData = GenerateCloudInitForImage(cloudInitConfig, imageName)
 	}
 
