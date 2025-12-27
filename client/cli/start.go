@@ -138,7 +138,7 @@ func startClient(configPath string) error {
 
 	// Stop the daemon
 	if err := daemon.Stop(); err != nil {
-		log.WithFields(map[string]interface{}{
+		log.WithFields(map[string]any{
 			"error": err.Error(),
 		}).Error("Error stopping DockBridge daemon")
 	}

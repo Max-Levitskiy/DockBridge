@@ -73,7 +73,7 @@ func (m *Manager) Stop() error {
 	}
 
 	if err := m.activityTracker.Stop(); err != nil {
-		m.logger.WithFields(map[string]interface{}{
+		m.logger.WithFields(map[string]any{
 			"error": err.Error(),
 		}).Error("Failed to stop activity tracker")
 	}
@@ -94,7 +94,7 @@ func (m *Manager) RecordConnectionActivity() error {
 
 // handleActivityEvent handles activity events and manages shutdown timers
 func (m *Manager) handleActivityEvent(event activity.ActivityEvent) error {
-	m.logger.WithFields(map[string]interface{}{
+	m.logger.WithFields(map[string]any{
 		"activity_type": string(event.Type),
 		"timestamp":     event.Timestamp,
 	}).Debug("Activity recorded")
@@ -144,7 +144,7 @@ func (m *Manager) checkAndScheduleShutdown() {
 	hasRunningServers, err := m.hasRunningServers()
 	if err != nil {
 		// If we can't check server status, log error but don't spam
-		m.logger.WithFields(map[string]interface{}{
+		m.logger.WithFields(map[string]any{
 			"error": err.Error(),
 		}).Debug("Failed to check server status")
 		return
@@ -159,7 +159,7 @@ func (m *Manager) checkAndScheduleShutdown() {
 
 	// Only log when approaching shutdown to avoid spam
 	if timeUntilShutdown <= m.config.GracePeriod*2 {
-		m.logger.WithFields(map[string]interface{}{
+		m.logger.WithFields(map[string]any{
 			"time_until_shutdown": timeUntilShutdown,
 			"reason":              reason,
 		}).Debug("Activity check - approaching shutdown")
@@ -177,7 +177,7 @@ func (m *Manager) checkAndScheduleShutdown() {
 		m.mu.Unlock()
 
 		// Time to shutdown
-		m.logger.WithFields(map[string]interface{}{
+		m.logger.WithFields(map[string]any{
 			"reason": reason,
 		}).Info("🚨 Activity timeout reached, shutting down server immediately")
 
@@ -188,7 +188,7 @@ func (m *Manager) checkAndScheduleShutdown() {
 	// Check if we need to schedule a shutdown timer - be more aggressive
 	gracePeriodThreshold := m.config.GracePeriod * 2 // Start warning earlier
 	if m.shutdownTimer == nil && timeUntilShutdown <= gracePeriodThreshold {
-		m.logger.WithFields(map[string]interface{}{
+		m.logger.WithFields(map[string]any{
 			"time_until_shutdown": timeUntilShutdown,
 			"reason":              reason,
 			"grace_period":        m.config.GracePeriod,
@@ -205,7 +205,7 @@ func (m *Manager) checkAndScheduleShutdown() {
 			m.shutdownInProgress = true
 			m.mu.Unlock()
 
-			m.logger.WithFields(map[string]interface{}{
+			m.logger.WithFields(map[string]any{
 				"reason": reason,
 			}).Info("⏱️ Grace period expired, shutting down server now")
 			m.shutdownServer(reason)
@@ -222,7 +222,7 @@ func (m *Manager) shutdownServer(reason string) {
 		m.mu.Unlock()
 	}()
 
-	m.logger.WithFields(map[string]interface{}{
+	m.logger.WithFields(map[string]any{
 		"reason": reason,
 	}).Info("Starting server shutdown process")
 
@@ -232,7 +232,7 @@ func (m *Manager) shutdownServer(reason string) {
 	// List servers to find the one to shutdown
 	servers, err := m.serverManager.ListServers(m.ctx)
 	if err != nil {
-		m.logger.WithFields(map[string]interface{}{
+		m.logger.WithFields(map[string]any{
 			"error": err.Error(),
 		}).Error("Failed to list servers for shutdown")
 		return
@@ -253,14 +253,14 @@ func (m *Manager) shutdownServer(reason string) {
 		return
 	}
 
-	m.logger.WithFields(map[string]interface{}{
+	m.logger.WithFields(map[string]any{
 		"server_id":   serverToShutdown.ID,
 		"server_name": serverToShutdown.Name,
 		"reason":      reason,
 	}).Info("Shutting down server due to inactivity")
 
 	// Destroy the server (this preserves the volume)
-	m.logger.WithFields(map[string]interface{}{
+	m.logger.WithFields(map[string]any{
 		"server_id":   serverToShutdown.ID,
 		"server_name": serverToShutdown.Name,
 	}).Info("💥 DESTROYING SERVER due to inactivity")
@@ -268,18 +268,18 @@ func (m *Manager) shutdownServer(reason string) {
 	if err := m.serverManager.DestroyServer(m.ctx, serverToShutdown.ID); err != nil {
 		// Check if the error is "server not found" - this means it was already destroyed
 		if isServerNotFoundError(err) {
-			m.logger.WithFields(map[string]interface{}{
+			m.logger.WithFields(map[string]any{
 				"server_id": serverToShutdown.ID,
 			}).Info("✅ Server already destroyed (not found), shutdown successful")
 		} else {
-			m.logger.WithFields(map[string]interface{}{
+			m.logger.WithFields(map[string]any{
 				"server_id": serverToShutdown.ID,
 				"error":     err.Error(),
 			}).Error("❌ FAILED to destroy server")
 			return
 		}
 	} else {
-		m.logger.WithFields(map[string]interface{}{
+		m.logger.WithFields(map[string]any{
 			"server_id":   serverToShutdown.ID,
 			"server_name": serverToShutdown.Name,
 		}).Info("✅ Server destroyed successfully, volume preserved for future use")

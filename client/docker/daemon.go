@@ -83,7 +83,7 @@ func (d *DockBridgeDaemon) Start(ctx context.Context, config *DaemonConfig) erro
 	}
 	d.logger.Info("Activity tracker started successfully")
 
-	d.logger.WithFields(map[string]interface{}{
+	d.logger.WithFields(map[string]any{
 		"idle_timeout":       d.config.ActivityConfig.IdleTimeout,
 		"connection_timeout": d.config.ActivityConfig.ConnectionTimeout,
 		"grace_period":       d.config.ActivityConfig.GracePeriod,
@@ -101,7 +101,7 @@ func (d *DockBridgeDaemon) Start(ctx context.Context, config *DaemonConfig) erro
 
 	// Start accepting connections in a goroutine
 	go func() {
-		d.logger.WithFields(map[string]interface{}{
+		d.logger.WithFields(map[string]any{
 			"socket_path": d.config.SocketPath,
 		}).Info("Starting DockBridge daemon with direct socket forwarding")
 
@@ -137,7 +137,7 @@ func (d *DockBridgeDaemon) Stop() error {
 	// Stop lifecycle manager
 	if d.lifecycleManager != nil {
 		if err := d.lifecycleManager.Stop(); err != nil {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Error("Failed to stop lifecycle manager")
 		}
@@ -146,7 +146,7 @@ func (d *DockBridgeDaemon) Stop() error {
 	// Stop activity tracker
 	if d.activityTracker != nil {
 		if err := d.activityTracker.Stop(); err != nil {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Error("Failed to stop activity tracker")
 		}
@@ -155,7 +155,7 @@ func (d *DockBridgeDaemon) Stop() error {
 	// Close client manager
 	if d.clientManager != nil {
 		if err := d.clientManager.Close(); err != nil {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Error("Failed to close client manager")
 		}
@@ -163,7 +163,7 @@ func (d *DockBridgeDaemon) Stop() error {
 
 	// Clean up socket file
 	if err := os.RemoveAll(d.config.SocketPath); err != nil {
-		d.logger.WithFields(map[string]interface{}{
+		d.logger.WithFields(map[string]any{
 			"error":       err.Error(),
 			"socket_path": d.config.SocketPath,
 		}).Warn("Failed to remove socket file")
@@ -227,7 +227,7 @@ func (d *DockBridgeDaemon) setupListener() error {
 
 		// Set proper permissions for the socket
 		if err := d.setSocketPermissions(d.config.SocketPath); err != nil {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"socket_path": d.config.SocketPath,
 				"error":       err.Error(),
 			}).Warn("Failed to set socket permissions")
@@ -248,7 +248,7 @@ func (d *DockBridgeDaemon) acceptConnections() {
 			case <-d.ctx.Done():
 				return // Graceful shutdown
 			default:
-				d.logger.WithFields(map[string]interface{}{
+				d.logger.WithFields(map[string]any{
 					"error": err.Error(),
 				}).Error("Failed to accept connection")
 				continue
@@ -267,19 +267,19 @@ func (d *DockBridgeDaemon) handleConnection(localConn net.Conn) {
 
 	defer func() {
 		localConn.Close()
-		d.logger.WithFields(map[string]interface{}{
+		d.logger.WithFields(map[string]any{
 			"conn_id": connID,
 		}).Debug("Connection cleanup completed")
 	}()
 
-	d.logger.WithFields(map[string]interface{}{
+	d.logger.WithFields(map[string]any{
 		"conn_id": connID,
 		"remote":  localConn.RemoteAddr(),
 	}).Info("🐳 New Docker connection - establishing remote server connection...")
 
 	// Ensure we have a connection to remote server
 	if err := d.clientManager.EnsureConnection(d.ctx); err != nil {
-		d.logger.WithFields(map[string]interface{}{
+		d.logger.WithFields(map[string]any{
 			"conn_id": connID,
 			"error":   err.Error(),
 		}).Error("❌ Failed to ensure connection to remote server")
@@ -293,7 +293,7 @@ func (d *DockBridgeDaemon) handleConnection(localConn net.Conn) {
 	// Get SSH tunnel from client manager
 	tunnel, err := d.getTunnelFromClientManager()
 	if err != nil {
-		d.logger.WithFields(map[string]interface{}{
+		d.logger.WithFields(map[string]any{
 			"conn_id": connID,
 			"error":   err.Error(),
 		}).Error("Failed to get SSH tunnel")
@@ -303,7 +303,7 @@ func (d *DockBridgeDaemon) handleConnection(localConn net.Conn) {
 	// Create connection to remote Docker daemon via SSH tunnel
 	remoteConn, err := net.Dial("tcp", tunnel.LocalAddr())
 	if err != nil {
-		d.logger.WithFields(map[string]interface{}{
+		d.logger.WithFields(map[string]any{
 			"conn_id":     connID,
 			"tunnel_addr": tunnel.LocalAddr(),
 			"error":       err.Error(),
@@ -316,12 +316,12 @@ func (d *DockBridgeDaemon) handleConnection(localConn net.Conn) {
 	}
 	defer func() {
 		remoteConn.Close()
-		d.logger.WithFields(map[string]interface{}{
+		d.logger.WithFields(map[string]any{
 			"conn_id": connID,
 		}).Debug("Remote connection closed")
 	}()
 
-	d.logger.WithFields(map[string]interface{}{
+	d.logger.WithFields(map[string]any{
 		"conn_id":     connID,
 		"tunnel_addr": tunnel.LocalAddr(),
 	}).Info("Connected to remote Docker daemon via SSH tunnel")
@@ -329,7 +329,7 @@ func (d *DockBridgeDaemon) handleConnection(localConn net.Conn) {
 	// Relay traffic bidirectionally using pure byte copying
 	d.relayTraffic(localConn, remoteConn, connID)
 
-	d.logger.WithFields(map[string]interface{}{
+	d.logger.WithFields(map[string]any{
 		"conn_id": connID,
 	}).Info("Docker connection terminated")
 }
@@ -343,13 +343,13 @@ func (d *DockBridgeDaemon) relayTraffic(local, remote net.Conn, connID string) {
 		defer func() { done <- struct{}{} }()
 		bytes, err := io.Copy(remote, local)
 		if err != nil && err != io.EOF {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"conn_id": connID,
 				"bytes":   bytes,
 				"error":   err.Error(),
 			}).Debug("Local->Remote copy ended with error")
 		} else {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"conn_id": connID,
 				"bytes":   bytes,
 			}).Debug("Local->Remote copy completed")
@@ -361,13 +361,13 @@ func (d *DockBridgeDaemon) relayTraffic(local, remote net.Conn, connID string) {
 		defer func() { done <- struct{}{} }()
 		bytes, err := io.Copy(local, remote)
 		if err != nil && err != io.EOF {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"conn_id": connID,
 				"bytes":   bytes,
 				"error":   err.Error(),
 			}).Debug("Remote->Local copy ended with error")
 		} else {
-			d.logger.WithFields(map[string]interface{}{
+			d.logger.WithFields(map[string]any{
 				"conn_id": connID,
 				"bytes":   bytes,
 			}).Debug("Remote->Local copy completed")
@@ -376,7 +376,7 @@ func (d *DockBridgeDaemon) relayTraffic(local, remote net.Conn, connID string) {
 
 	// Wait for either direction to complete
 	<-done
-	d.logger.WithFields(map[string]interface{}{
+	d.logger.WithFields(map[string]any{
 		"conn_id": connID,
 	}).Debug("Traffic relay completed")
 }
@@ -438,7 +438,7 @@ func (d *DockBridgeDaemon) setSocketPermissions(socketPath string) error {
 		return nil // Don't fail, socket is already 666
 	}
 
-	d.logger.WithFields(map[string]interface{}{
+	d.logger.WithFields(map[string]any{
 		"socket_path": socketPath,
 		"group":       targetGroup.Name,
 		"gid":         gid,

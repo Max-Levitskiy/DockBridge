@@ -58,7 +58,7 @@ func TestLogErrorWithFields(t *testing.T) {
 
 	// Test with DockBridgeError and additional fields
 	dockErr := NewError(ErrCategoryNetwork, "TEST_ERROR", "Test error message", nil, true)
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"operation": "connect",
 		"target":    "example.com",
 	}

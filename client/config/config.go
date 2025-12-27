@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -201,13 +202,13 @@ func (m *Manager) validateHetzner() error {
 
 	// Validate server type
 	validServerTypes := []string{"cx11", "cpx11", "cx21", "cx23", "cpx21", "cx31", "cpx31", "cx41", "cpx41", "cx51", "cpx51"}
-	if !contains(validServerTypes, hetzner.ServerType) {
+	if !slices.Contains(validServerTypes, hetzner.ServerType) {
 		return fmt.Errorf("invalid server_type '%s', must be one of: %s", hetzner.ServerType, strings.Join(validServerTypes, ", "))
 	}
 
 	// Validate location
 	validLocations := []string{"fsn1", "nbg1", "hel1", "ash", "hil"}
-	if !contains(validLocations, hetzner.Location) {
+	if !slices.Contains(validLocations, hetzner.Location) {
 		return fmt.Errorf("invalid location '%s', must be one of: %s", hetzner.Location, strings.Join(validLocations, ", "))
 	}
 
@@ -334,19 +335,19 @@ func (m *Manager) validateLogging() error {
 
 	// Validate log level
 	validLevels := []string{"debug", "info", "warn", "error", "fatal"}
-	if !contains(validLevels, strings.ToLower(logging.Level)) {
+	if !slices.Contains(validLevels, strings.ToLower(logging.Level)) {
 		return fmt.Errorf("invalid level '%s', must be one of: %s", logging.Level, strings.Join(validLevels, ", "))
 	}
 
 	// Validate format
 	validFormats := []string{"json", "text"}
-	if !contains(validFormats, strings.ToLower(logging.Format)) {
+	if !slices.Contains(validFormats, strings.ToLower(logging.Format)) {
 		return fmt.Errorf("invalid format '%s', must be one of: %s", logging.Format, strings.Join(validFormats, ", "))
 	}
 
 	// Validate output
 	validOutputs := []string{"stdout", "stderr"}
-	if !contains(validOutputs, strings.ToLower(logging.Output)) && !strings.HasPrefix(logging.Output, "/") {
+	if !slices.Contains(validOutputs, strings.ToLower(logging.Output)) && !strings.HasPrefix(logging.Output, "/") {
 		return fmt.Errorf("invalid output '%s', must be 'stdout', 'stderr', or a file path", logging.Output)
 	}
 
@@ -359,7 +360,7 @@ func (m *Manager) validatePortForward() error {
 
 	// Validate conflict strategy
 	validStrategies := []string{"increment", "fail"}
-	if !contains(validStrategies, string(portForward.ConflictStrategy)) {
+	if !slices.Contains(validStrategies, string(portForward.ConflictStrategy)) {
 		return fmt.Errorf("invalid conflict_strategy '%s', must be one of: %s", portForward.ConflictStrategy, strings.Join(validStrategies, ", "))
 	}
 
@@ -369,14 +370,4 @@ func (m *Manager) validatePortForward() error {
 	}
 
 	return nil
-}
-
-// contains checks if a slice contains a string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

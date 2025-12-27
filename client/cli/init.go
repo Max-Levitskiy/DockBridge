@@ -149,7 +149,7 @@ func runGuidedSetup(force bool) error {
 	return nil
 }
 
-func saveClientConfig(path string, cfg interface{}) error {
+func saveClientConfig(path string, cfg any) error {
 	// Convert config to YAML
 	yamlData, err := yaml.Marshal(cfg)
 	if err != nil {

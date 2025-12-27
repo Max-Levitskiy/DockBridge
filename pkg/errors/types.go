@@ -160,6 +160,6 @@ func Is(err, target error) bool {
 // As finds the first error in err's tree that matches target, and if one is found, sets
 // target to that error value and returns true. Otherwise, it returns false.
 // This is a wrapper around the standard errors.As function.
-func As(err error, target interface{}) bool {
+func As(err error, target any) bool {
 	return errors.As(err, target)
 }

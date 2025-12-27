@@ -185,7 +185,7 @@ func (m *Monitor) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 
 	m.RecordHeartbeat()
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"status":              "ok",
 		"last_heartbeat":      m.GetLastHeartbeat().Format(time.RFC3339),
 		"time_until_shutdown": (m.config.Timeout - m.GetTimeSinceLastHeartbeat()).String(),
@@ -205,7 +205,7 @@ func (m *Monitor) handleStatus(w http.ResponseWriter, r *http.Request) {
 	timeSinceLast := m.GetTimeSinceLastHeartbeat()
 	timeUntilShutdown := m.config.Timeout - timeSinceLast
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"server_id":            m.config.ServerID,
 		"last_heartbeat":       m.GetLastHeartbeat().Format(time.RFC3339),
 		"time_since_heartbeat": timeSinceLast.String(),

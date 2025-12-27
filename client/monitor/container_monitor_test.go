@@ -105,8 +105,7 @@ func TestContainerMonitor_BasicLifecycle(t *testing.T) {
 	mockClient.On("ContainerList", mock.Anything, mock.Anything).Return([]container.Summary{}, nil)
 
 	// Start monitor
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	err := monitor.Start(ctx)
 	require.NoError(t, err)

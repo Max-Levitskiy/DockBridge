@@ -57,7 +57,8 @@ func generateOptimizedCloudInitScript(config *CloudInitConfig) string {
 		config.DockerAPIPort = 2376
 	}
 
-	script := `#cloud-config
+	var sb strings.Builder
+	sb.WriteString(`#cloud-config
 
 # Optimized cloud-init for Docker pre-installed images
 # Skip package updates for faster startup
@@ -70,51 +71,51 @@ packages:
   - parted
   - htop
   - vim
-`
+`)
 
 	// Add additional packages if specified
 	if len(config.Packages) > 0 {
 		for _, pkg := range config.Packages {
-			script += fmt.Sprintf("  - %s\n", pkg)
+			sb.WriteString(fmt.Sprintf("  - %s\n", pkg))
 		}
 	}
 
 	// Add SSH key if provided
 	if config.SSHPublicKey != "" {
-		script += fmt.Sprintf(`
+		sb.WriteString(fmt.Sprintf(`
 # Configure SSH access
 ssh_authorized_keys:
   - %s
-`, config.SSHPublicKey)
+`, config.SSHPublicKey))
 	}
 
 	// Add additional users if specified
 	if len(config.AdditionalUsers) > 0 {
-		script += "\n# Create additional users\nusers:\n"
+		sb.WriteString("\n# Create additional users\nusers:\n")
 		for _, user := range config.AdditionalUsers {
-			script += fmt.Sprintf(`  - name: %s
+			sb.WriteString(fmt.Sprintf(`  - name: %s
     groups: docker,sudo
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
-`, user)
+`, user))
 		}
 	}
 
 	// Add run commands for optimized Docker volume configuration
-	script += `
+	sb.WriteString(`
 # Run commands for optimized setup (Docker already installed)
 runcmd:
   # Stop Docker before volume operations (Docker should already be installed)
   - systemctl stop docker || echo "Docker not running, continuing..."
-`
+`)
 
 	// Add the common volume setup, Docker config, and DockBridge server setup
-	script += generateVolumeSetupScript(config)
-	script += generateDockerConfigurationScript(config)
-	script += generateDockBridgeServerScript(config)
-	script += generateFinalConfigurationScript(config)
+	sb.WriteString(generateVolumeSetupScript(config))
+	sb.WriteString(generateDockerConfigurationScript(config))
+	sb.WriteString(generateDockBridgeServerScript(config))
+	sb.WriteString(generateFinalConfigurationScript(config))
 
-	return strings.TrimSpace(script)
+	return strings.TrimSpace(sb.String())
 }
 
 // GetDefaultCloudInitConfig returns a default cloud-init configuration optimized for Docker images
@@ -153,7 +154,8 @@ func generateFullDockerInstallScript(config *CloudInitConfig) string {
 		config.DockerAPIPort = 2376
 	}
 
-	script := `#cloud-config
+	var sb strings.Builder
+	sb.WriteString(`#cloud-config
 
 # Full Docker installation for non-Docker images
 package_update: true
@@ -173,38 +175,38 @@ packages:
   - vim
   - e2fsprogs
   - parted
-`
+`)
 
 	// Add additional packages if specified
 	if len(config.Packages) > 0 {
 		for _, pkg := range config.Packages {
-			script += fmt.Sprintf("  - %s\n", pkg)
+			sb.WriteString(fmt.Sprintf("  - %s\n", pkg))
 		}
 	}
 
 	// Add SSH key if provided
 	if config.SSHPublicKey != "" {
-		script += fmt.Sprintf(`
+		sb.WriteString(fmt.Sprintf(`
 # Configure SSH access
 ssh_authorized_keys:
   - %s
-`, config.SSHPublicKey)
+`, config.SSHPublicKey))
 	}
 
 	// Add additional users if specified
 	if len(config.AdditionalUsers) > 0 {
-		script += "\n# Create additional users\nusers:\n"
+		sb.WriteString("\n# Create additional users\nusers:\n")
 		for _, user := range config.AdditionalUsers {
-			script += fmt.Sprintf(`  - name: %s
+			sb.WriteString(fmt.Sprintf(`  - name: %s
     groups: docker,sudo
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
-`, user)
+`, user))
 		}
 	}
 
 	// Add run commands for full Docker installation
-	script += `
+	sb.WriteString(`
 # Run commands for full Docker installation
 runcmd:
   # Install Docker CE first (before volume operations)
@@ -215,16 +217,16 @@ runcmd:
   
   # Stop Docker before volume operations
   - systemctl stop docker
-`
+`)
 
 	// Continue with the rest of the volume setup script...
 	// (The volume setup part remains the same for both optimized and full scripts)
-	script += generateVolumeSetupScript(config)
-	script += generateDockerConfigurationScript(config)
-	script += generateDockBridgeServerScript(config)
-	script += generateFinalConfigurationScript(config)
+	sb.WriteString(generateVolumeSetupScript(config))
+	sb.WriteString(generateDockerConfigurationScript(config))
+	sb.WriteString(generateDockBridgeServerScript(config))
+	sb.WriteString(generateFinalConfigurationScript(config))
 
-	return strings.TrimSpace(script)
+	return strings.TrimSpace(sb.String())
 }
 
 // generateVolumeSetupScript creates the volume setup portion of cloud-init

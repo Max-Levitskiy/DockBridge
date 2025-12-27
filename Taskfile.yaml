@@ -46,6 +46,18 @@ tasks:
       - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin
       - echo "✅ golangci-lint installed"
 
+  modernize:
+    desc: Run modernize linter to check for code modernizations
+    deps: [golangci-lint:install]
+    cmds:
+      - golangci-lint run --enable-only modernize ./...
+
+  modernize:fix:
+    desc: Run modernize linter and automatically fix issues
+    deps: [golangci-lint:install]
+    cmds:
+      - golangci-lint run --fix --enable-only modernize ./...
+
   fmt:
     desc: Format code
     cmds:

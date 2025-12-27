@@ -1,6 +1,8 @@
 package errors
 
 import (
+	"maps"
+
 	"github.com/dockbridge/dockbridge/pkg/logger"
 )
 
@@ -12,7 +14,7 @@ func LogError(err error, msg string) {
 
 	var dockErr *DockBridgeError
 	if As(err, &dockErr) {
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"error_category": dockErr.Category,
 			"error_code":     dockErr.Code,
 			"retryable":      dockErr.Retryable,
@@ -30,15 +32,14 @@ func LogError(err error, msg string) {
 }
 
 // LogErrorWithFields logs an error with additional context fields
-func LogErrorWithFields(err error, msg string, fields map[string]interface{}) {
+func LogErrorWithFields(err error, msg string, fields map[string]any) {
 	if err == nil {
 		return
 	}
 
-	logFields := make(map[string]interface{})
-	for k, v := range fields {
-		logFields[k] = v
-	}
+	logFields := make(map[string]any)
+
+	maps.Copy(logFields, fields)
 
 	var dockErr *DockBridgeError
 	if As(err, &dockErr) {
@@ -67,7 +68,7 @@ func LogDebug(err error, msg string) {
 
 	var dockErr *DockBridgeError
 	if As(err, &dockErr) {
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"error_category": dockErr.Category,
 			"error_code":     dockErr.Code,
 			"retryable":      dockErr.Retryable,
@@ -92,7 +93,7 @@ func LogWarn(err error, msg string) {
 
 	var dockErr *DockBridgeError
 	if As(err, &dockErr) {
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"error_category": dockErr.Category,
 			"error_code":     dockErr.Code,
 			"retryable":      dockErr.Retryable,
@@ -117,7 +118,7 @@ func LogFatal(err error, msg string) {
 
 	var dockErr *DockBridgeError
 	if As(err, &dockErr) {
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"error_category": dockErr.Category,
 			"error_code":     dockErr.Code,
 			"retryable":      dockErr.Retryable,

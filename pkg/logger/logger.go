@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strings"
 	"sync"
@@ -75,7 +76,7 @@ func ParseLevel(level string) (Level, error) {
 type Logger struct {
 	level      Level
 	out        io.Writer
-	fields     map[string]interface{}
+	fields     map[string]any
 	mu         sync.Mutex
 	UseColors  bool
 	timeFormat string
@@ -103,7 +104,7 @@ func New(cfg *Config) (*Logger, error) {
 	return &Logger{
 		level:      level,
 		out:        os.Stdout,
-		fields:     make(map[string]interface{}),
+		fields:     make(map[string]any),
 		UseColors:  cfg.UseColors,
 		timeFormat: timeFormat,
 	}, nil
@@ -114,7 +115,7 @@ func NewDefault() *Logger {
 	return &Logger{
 		level:      Info,
 		out:        os.Stdout,
-		fields:     make(map[string]interface{}),
+		fields:     make(map[string]any),
 		UseColors:  true,
 		timeFormat: "2006-01-02T15:04:05.000Z07:00",
 	}
@@ -135,12 +136,12 @@ func (l *Logger) SetLevel(level Level) {
 }
 
 // WithField returns a new logger with the field added to the context
-func (l *Logger) WithField(key string, value interface{}) *Logger {
-	return l.WithFields(map[string]interface{}{key: value})
+func (l *Logger) WithField(key string, value any) *Logger {
+	return l.WithFields(map[string]any{key: value})
 }
 
 // WithFields returns a new logger with the fields added to the context
-func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
+func (l *Logger) WithFields(fields map[string]any) *Logger {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -149,24 +150,20 @@ func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
 		out:        l.out,
 		UseColors:  l.UseColors,
 		timeFormat: l.timeFormat,
-		fields:     make(map[string]interface{}, len(l.fields)+len(fields)),
+		fields:     make(map[string]any, len(l.fields)+len(fields)),
 	}
 
 	// Copy existing fields
-	for k, v := range l.fields {
-		newLogger.fields[k] = v
-	}
+	maps.Copy(newLogger.fields, l.fields)
 
 	// Add new fields
-	for k, v := range fields {
-		newLogger.fields[k] = v
-	}
+	maps.Copy(newLogger.fields, fields)
 
 	return newLogger
 }
 
 // log logs a message at the specified level
-func (l *Logger) log(level Level, msg string, args ...interface{}) {
+func (l *Logger) log(level Level, msg string, args ...any) {
 	if level < l.level {
 		return
 	}
@@ -228,27 +225,27 @@ func (l *Logger) log(level Level, msg string, args ...interface{}) {
 }
 
 // Debug logs a debug message
-func (l *Logger) Debug(msg string, args ...interface{}) {
+func (l *Logger) Debug(msg string, args ...any) {
 	l.log(Debug, msg, args...)
 }
 
 // Info logs an info message
-func (l *Logger) Info(msg string, args ...interface{}) {
+func (l *Logger) Info(msg string, args ...any) {
 	l.log(Info, msg, args...)
 }
 
 // Warn logs a warning message
-func (l *Logger) Warn(msg string, args ...interface{}) {
+func (l *Logger) Warn(msg string, args ...any) {
 	l.log(Warn, msg, args...)
 }
 
 // Error logs an error message
-func (l *Logger) Error(msg string, args ...interface{}) {
+func (l *Logger) Error(msg string, args ...any) {
 	l.log(Error, msg, args...)
 }
 
 // Fatal logs a fatal message and exits
-func (l *Logger) Fatal(msg string, args ...interface{}) {
+func (l *Logger) Fatal(msg string, args ...any) {
 	l.log(Fatal, msg, args...)
 }
 
@@ -263,44 +260,44 @@ func SetDefaultLogger(logger *Logger) {
 // Global functions that use the default logger
 
 // GlobalDebug logs a debug message to the default logger
-func GlobalDebug(msg string, args ...interface{}) {
+func GlobalDebug(msg string, args ...any) {
 	defaultLogger.Debug(msg, args...)
 }
 
 // GlobalInfo logs an info message to the default logger
-func GlobalInfo(msg string, args ...interface{}) {
+func GlobalInfo(msg string, args ...any) {
 	defaultLogger.Info(msg, args...)
 }
 
 // GlobalWarn logs a warning message to the default logger
-func GlobalWarn(msg string, args ...interface{}) {
+func GlobalWarn(msg string, args ...any) {
 	defaultLogger.Warn(msg, args...)
 }
 
 // GlobalError logs an error message to the default logger
-func GlobalError(msg string, args ...interface{}) {
+func GlobalError(msg string, args ...any) {
 	defaultLogger.Error(msg, args...)
 }
 
 // GlobalFatal logs a fatal message to the default logger and exits
-func GlobalFatal(msg string, args ...interface{}) {
+func GlobalFatal(msg string, args ...any) {
 	defaultLogger.Fatal(msg, args...)
 }
 
 // GlobalWithField returns a new logger with the field added to the context
-func GlobalWithField(key string, value interface{}) *Logger {
+func GlobalWithField(key string, value any) *Logger {
 	return defaultLogger.WithField(key, value)
 }
 
 // GlobalWithFields returns a new logger with the fields added to the context
-func GlobalWithFields(fields map[string]interface{}) *Logger {
+func GlobalWithFields(fields map[string]any) *Logger {
 	return defaultLogger.WithFields(fields)
 }
 
 // Interface implementation methods
 
 // DebugWithFields logs a debug message with fields
-func (l *Logger) DebugWithFields(msg string, fields map[string]interface{}) {
+func (l *Logger) DebugWithFields(msg string, fields map[string]any) {
 	if fields != nil {
 		l.WithFields(fields).Debug(msg)
 	} else {
@@ -309,7 +306,7 @@ func (l *Logger) DebugWithFields(msg string, fields map[string]interface{}) {
 }
 
 // InfoWithFields logs an info message with fields
-func (l *Logger) InfoWithFields(msg string, fields map[string]interface{}) {
+func (l *Logger) InfoWithFields(msg string, fields map[string]any) {
 	if fields != nil {
 		l.WithFields(fields).Info(msg)
 	} else {
@@ -318,7 +315,7 @@ func (l *Logger) InfoWithFields(msg string, fields map[string]interface{}) {
 }
 
 // WarnWithFields logs a warning message with fields
-func (l *Logger) WarnWithFields(msg string, fields map[string]interface{}) {
+func (l *Logger) WarnWithFields(msg string, fields map[string]any) {
 	if fields != nil {
 		l.WithFields(fields).Warn(msg)
 	} else {
@@ -327,11 +324,9 @@ func (l *Logger) WarnWithFields(msg string, fields map[string]interface{}) {
 }
 
 // ErrorWithFields logs an error message with fields
-func (l *Logger) ErrorWithFields(msg string, err error, fields map[string]interface{}) {
-	combinedFields := make(map[string]interface{})
-	for k, v := range fields {
-		combinedFields[k] = v
-	}
+func (l *Logger) ErrorWithFields(msg string, err error, fields map[string]any) {
+	combinedFields := make(map[string]any)
+	maps.Copy(combinedFields, fields)
 	if err != nil {
 		combinedFields["error"] = err.Error()
 	}
@@ -344,11 +339,9 @@ func (l *Logger) ErrorWithFields(msg string, err error, fields map[string]interf
 }
 
 // FatalWithFields logs a fatal message with fields
-func (l *Logger) FatalWithFields(msg string, err error, fields map[string]interface{}) {
-	combinedFields := make(map[string]interface{})
-	for k, v := range fields {
-		combinedFields[k] = v
-	}
+func (l *Logger) FatalWithFields(msg string, err error, fields map[string]any) {
+	combinedFields := make(map[string]any)
+	maps.Copy(combinedFields, fields)
 	if err != nil {
 		combinedFields["error"] = err.Error()
 	}

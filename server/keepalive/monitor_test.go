@@ -103,7 +103,7 @@ func TestMonitor_HandleHeartbeat(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		err := json.NewDecoder(rec.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "ok", response["status"])
@@ -146,7 +146,7 @@ func TestMonitor_HandleStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.NewDecoder(rec.Body).Decode(&response)
 	require.NoError(t, err)
 
@@ -225,7 +225,7 @@ func TestHeartbeatClient_SendHeartbeat(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/heartbeat" && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"status":         "ok",
 				"last_heartbeat": time.Now().Format(time.RFC3339),
 			})

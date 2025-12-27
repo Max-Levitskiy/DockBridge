@@ -100,7 +100,7 @@ func (pfm *portForwardManagerImpl) Start(ctx context.Context) error {
 	pfm.ctx, pfm.cancel = context.WithCancel(ctx)
 	pfm.running = true
 
-	pfm.logger.WithFields(map[string]interface{}{
+	pfm.logger.WithFields(map[string]any{
 		"conflict_strategy": pfm.config.ConflictStrategy,
 		"monitor_interval":  pfm.config.MonitorInterval,
 	}).Info("Port forward manager started")
@@ -123,7 +123,7 @@ func (pfm *portForwardManagerImpl) Stop() error {
 	// Clean up all active forwards
 	for _, forward := range pfm.forwards {
 		if forward.Status == ForwardStatusActive {
-			pfm.logger.WithFields(map[string]interface{}{
+			pfm.logger.WithFields(map[string]any{
 				"forward_id":   forward.ID,
 				"container_id": forward.ContainerID,
 				"local_port":   forward.LocalPort,
@@ -150,7 +150,7 @@ func (pfm *portForwardManagerImpl) OnContainerCreated(container *monitor.Contain
 		return nil
 	}
 
-	pfm.logger.WithFields(map[string]interface{}{
+	pfm.logger.WithFields(map[string]any{
 		"container_id":   container.ID,
 		"container_name": container.Name,
 		"ports":          len(container.Ports),
@@ -162,7 +162,7 @@ func (pfm *portForwardManagerImpl) OnContainerCreated(container *monitor.Contain
 	// Create port forwards for exposed ports
 	for _, portMapping := range container.Ports {
 		if err := pfm.createPortForward(container, portMapping); err != nil {
-			pfm.logger.WithFields(map[string]interface{}{
+			pfm.logger.WithFields(map[string]any{
 				"container_id": container.ID,
 				"port":         portMapping.ContainerPort,
 				"error":        err.Error(),
@@ -182,7 +182,7 @@ func (pfm *portForwardManagerImpl) OnContainerStopped(containerID string) error 
 		return nil
 	}
 
-	pfm.logger.WithFields(map[string]interface{}{
+	pfm.logger.WithFields(map[string]any{
 		"container_id": containerID,
 	}).Debug("Container stopped event received")
 
@@ -198,7 +198,7 @@ func (pfm *portForwardManagerImpl) OnContainerRemoved(containerID string) error 
 		return nil
 	}
 
-	pfm.logger.WithFields(map[string]interface{}{
+	pfm.logger.WithFields(map[string]any{
 		"container_id": containerID,
 	}).Debug("Container removed event received")
 
@@ -291,7 +291,7 @@ func (pfm *portForwardManagerImpl) SetConfig(config *config.PortForwardConfig) e
 
 	pfm.config = config
 
-	pfm.logger.WithFields(map[string]interface{}{
+	pfm.logger.WithFields(map[string]any{
 		"enabled":           config.Enabled,
 		"conflict_strategy": config.ConflictStrategy,
 		"monitor_interval":  config.MonitorInterval,
@@ -311,7 +311,7 @@ func (pfm *portForwardManagerImpl) createPortForward(container *monitor.Containe
 
 	// Check if forward already exists
 	if _, exists := pfm.forwards[forwardID]; exists {
-		pfm.logger.WithFields(map[string]interface{}{
+		pfm.logger.WithFields(map[string]any{
 			"forward_id":   forwardID,
 			"container_id": container.ID,
 			"port":         portMapping.ContainerPort,
@@ -335,7 +335,7 @@ func (pfm *portForwardManagerImpl) createPortForward(container *monitor.Containe
 	pfm.forwards[forwardID] = forward
 	pfm.portMap[forward.LocalPort] = forwardID
 
-	pfm.logger.WithFields(map[string]interface{}{
+	pfm.logger.WithFields(map[string]any{
 		"forward_id":     forwardID,
 		"container_id":   container.ID,
 		"container_name": container.Name,
@@ -357,7 +357,7 @@ func (pfm *portForwardManagerImpl) removePortForward(forwardID string) error {
 	delete(pfm.forwards, forwardID)
 	delete(pfm.portMap, forward.LocalPort)
 
-	pfm.logger.WithFields(map[string]interface{}{
+	pfm.logger.WithFields(map[string]any{
 		"forward_id":   forwardID,
 		"container_id": forward.ContainerID,
 		"local_port":   forward.LocalPort,
@@ -381,7 +381,7 @@ func (pfm *portForwardManagerImpl) cleanupContainerForwards(containerID string) 
 	// Remove each forward
 	for _, forwardID := range forwardsToRemove {
 		if err := pfm.removePortForward(forwardID); err != nil {
-			pfm.logger.WithFields(map[string]interface{}{
+			pfm.logger.WithFields(map[string]any{
 				"forward_id":   forwardID,
 				"container_id": containerID,
 				"error":        err.Error(),

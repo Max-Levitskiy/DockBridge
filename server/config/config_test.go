@@ -293,13 +293,3 @@ func TestFullValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "keepalive:")
 	assert.Contains(t, err.Error(), "logging:")
 }
-
-func TestContainsHelper(t *testing.T) {
-	slice := []string{"a", "b", "c"}
-
-	assert.True(t, contains(slice, "a"))
-	assert.True(t, contains(slice, "b"))
-	assert.True(t, contains(slice, "c"))
-	assert.False(t, contains(slice, "d"))
-	assert.False(t, contains(slice, ""))
-}

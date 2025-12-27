@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -196,31 +197,21 @@ func (m *Manager) validateLogging() error {
 
 	// Validate log level
 	validLevels := []string{"debug", "info", "warn", "error", "fatal"}
-	if !contains(validLevels, strings.ToLower(logging.Level)) {
+	if !slices.Contains(validLevels, strings.ToLower(logging.Level)) {
 		return fmt.Errorf("invalid level '%s', must be one of: %s", logging.Level, strings.Join(validLevels, ", "))
 	}
 
 	// Validate format
 	validFormats := []string{"json", "text"}
-	if !contains(validFormats, strings.ToLower(logging.Format)) {
+	if !slices.Contains(validFormats, strings.ToLower(logging.Format)) {
 		return fmt.Errorf("invalid format '%s', must be one of: %s", logging.Format, strings.Join(validFormats, ", "))
 	}
 
 	// Validate output
 	validOutputs := []string{"stdout", "stderr"}
-	if !contains(validOutputs, strings.ToLower(logging.Output)) && !strings.HasPrefix(logging.Output, "/") {
+	if !slices.Contains(validOutputs, strings.ToLower(logging.Output)) && !strings.HasPrefix(logging.Output, "/") {
 		return fmt.Errorf("invalid output '%s', must be 'stdout', 'stderr', or a file path", logging.Output)
 	}
 
 	return nil
-}
-
-// contains checks if a slice contains a string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

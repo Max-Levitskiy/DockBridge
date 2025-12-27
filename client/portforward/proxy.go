@@ -111,7 +111,7 @@ func (lps *localProxyServerImpl) Start(ctx context.Context, localPort int, remot
 		lps.acceptConnections()
 	}()
 
-	lps.logger.WithFields(map[string]interface{}{
+	lps.logger.WithFields(map[string]any{
 		"local_port":  localPort,
 		"remote_addr": remoteAddr,
 	}).Info("Local proxy server started")
@@ -134,7 +134,7 @@ func (lps *localProxyServerImpl) Stop() error {
 	// Close the listener to stop accepting new connections
 	if lps.listener != nil {
 		if err := lps.listener.Close(); err != nil {
-			lps.logger.WithFields(map[string]interface{}{
+			lps.logger.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Error("Error closing listener")
 		}
@@ -145,7 +145,7 @@ func (lps *localProxyServerImpl) Stop() error {
 
 	lps.running = false
 
-	lps.logger.WithFields(map[string]interface{}{
+	lps.logger.WithFields(map[string]any{
 		"local_port":        lps.localPort,
 		"remote_addr":       lps.remoteAddr,
 		"total_connections": atomic.LoadInt64(&lps.totalConnections),
@@ -203,7 +203,7 @@ func (lps *localProxyServerImpl) acceptConnections() {
 			if errors.Is(err, net.ErrClosed) {
 				return
 			}
-			lps.logger.WithFields(map[string]interface{}{
+			lps.logger.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Error("Error accepting connection")
 			continue
@@ -231,7 +231,7 @@ func (lps *localProxyServerImpl) handleConnection(localConn net.Conn) {
 		atomic.AddInt32(&lps.activeConnections, -1)
 	}()
 
-	lps.logger.WithFields(map[string]interface{}{
+	lps.logger.WithFields(map[string]any{
 		"local_addr":  localConn.LocalAddr().String(),
 		"remote_addr": localConn.RemoteAddr().String(),
 		"target":      lps.remoteAddr,
@@ -240,7 +240,7 @@ func (lps *localProxyServerImpl) handleConnection(localConn net.Conn) {
 	// Create SSH tunnel to remote address
 	tunnel, err := lps.sshClient.CreateTunnel(lps.ctx, "localhost:0", lps.remoteAddr)
 	if err != nil {
-		lps.logger.WithFields(map[string]interface{}{
+		lps.logger.WithFields(map[string]any{
 			"error":       err.Error(),
 			"remote_addr": lps.remoteAddr,
 		}).Error("Failed to create SSH tunnel")
@@ -252,7 +252,7 @@ func (lps *localProxyServerImpl) handleConnection(localConn net.Conn) {
 	tunnelAddr := tunnel.LocalAddr()
 	remoteConn, err := net.Dial("tcp", tunnelAddr)
 	if err != nil {
-		lps.logger.WithFields(map[string]interface{}{
+		lps.logger.WithFields(map[string]any{
 			"error":       err.Error(),
 			"tunnel_addr": tunnelAddr,
 		}).Error("Failed to connect to SSH tunnel")
@@ -289,7 +289,7 @@ func (lps *localProxyServerImpl) proxyData(localConn, remoteConn net.Conn) {
 	select {
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, io.EOF) && !isConnectionClosed(err) {
-			lps.logger.WithFields(map[string]interface{}{
+			lps.logger.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Debug("Connection proxy error")
 		}

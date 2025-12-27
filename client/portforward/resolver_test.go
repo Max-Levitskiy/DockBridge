@@ -285,7 +285,7 @@ func TestPortConflictResolver_ConcurrentAccess(t *testing.T) {
 	// This is a basic test - in practice, port availability can change between check and use
 	done := make(chan bool, 10)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(id int) {
 			defer func() { done <- true }()
 
@@ -298,7 +298,7 @@ func TestPortConflictResolver_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 }

@@ -72,7 +72,7 @@ func TestWithField(t *testing.T) {
 
 func TestWithFields(t *testing.T) {
 	logger := NewDefault()
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"key1": "value1",
 		"key2": 42,
 	}
@@ -161,7 +161,7 @@ func TestLogWithFields(t *testing.T) {
 	logger.SetOutput(buf)
 	logger.UseColors = false // Disable colors for testing
 
-	logger.WithFields(map[string]interface{}{
+	logger.WithFields(map[string]any{
 		"user":   "test",
 		"action": "login",
 	}).Info("user login")

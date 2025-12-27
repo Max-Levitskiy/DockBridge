@@ -1,7 +1,6 @@
 package portforward
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -25,8 +24,7 @@ func TestContainerMonitorPortForwardIntegration(t *testing.T) {
 	pfManager := NewPortForwardManager(pfConfig, mockLogger)
 
 	// Start port forward manager
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	err := pfManager.Start(ctx)
 	require.NoError(t, err)
@@ -102,8 +100,7 @@ func TestContainerMonitorPortForwardRemoval(t *testing.T) {
 	pfManager := NewPortForwardManager(pfConfig, mockLogger)
 
 	// Start port forward manager
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	err := pfManager.Start(ctx)
 	require.NoError(t, err)
@@ -156,8 +153,7 @@ func TestContainerMonitorMultipleContainers(t *testing.T) {
 	pfManager := NewPortForwardManager(pfConfig, mockLogger)
 
 	// Start port forward manager
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	err := pfManager.Start(ctx)
 	require.NoError(t, err)

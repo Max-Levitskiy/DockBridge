@@ -231,8 +231,7 @@ func BenchmarkCloudInitGeneration(b *testing.B) {
 		DockerAPIPort: 2376,
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = hetzner.GenerateCloudInitScript(config)
 	}
 }

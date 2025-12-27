@@ -389,8 +389,7 @@ func BenchmarkManager_EnsureServer(b *testing.B) {
 		Status:   "attached",
 	}, nil)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := manager.EnsureServer(context.Background())
 		if err != nil {
 			b.Fatal(err)

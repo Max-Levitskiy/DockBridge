@@ -84,7 +84,7 @@ type dockerClientManagerImpl struct {
 	portForwardConfig  *config.PortForwardConfig
 
 	// Activity tracking (optional)
-	activityTracker interface{}
+	activityTracker any
 }
 
 // NewDockerClientManager creates a new Docker client manager
@@ -109,7 +109,7 @@ func NewDockerClientManagerWithPortForwarding(hetznerClient hetzner.HetznerClien
 }
 
 // NewDockerClientManagerWithActivity creates a new Docker client manager with activity tracking support
-func NewDockerClientManagerWithActivity(hetznerClient hetzner.HetznerClient, sshConfig *config.SSHConfig, hetznerConfig *config.HetznerConfig, logger logger.LoggerInterface, activityTracker interface{}) DockerClientManager {
+func NewDockerClientManagerWithActivity(hetznerClient hetzner.HetznerClient, sshConfig *config.SSHConfig, hetznerConfig *config.HetznerConfig, logger logger.LoggerInterface, activityTracker any) DockerClientManager {
 	return &dockerClientManagerImpl{
 		hetznerClient:   hetznerClient,
 		sshConfig:       sshConfig,
@@ -162,7 +162,7 @@ func (dcm *dockerClientManagerImpl) GetClient(ctx context.Context) (*client.Clie
 	}
 
 	dcm.dockerClient = dockerClient
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"tunnel_addr": dcm.tunnel.LocalAddr(),
 		"server_ip":   dcm.currentServer.IPAddress,
 	}).Info("Docker client created successfully")
@@ -215,7 +215,7 @@ func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error 
 			break
 		}
 
-		dcm.logger.WithFields(map[string]interface{}{
+		dcm.logger.WithFields(map[string]any{
 			"attempt":   attempt,
 			"max_tries": maxRetries,
 			"error":     connectErr.Error(),
@@ -231,7 +231,7 @@ func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error 
 		return errors.Wrap(connectErr, "failed to connect to SSH server after retries")
 	}
 
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"server_ip": server.IPAddress,
 	}).Info("SSH connection established successfully")
 
@@ -248,7 +248,7 @@ func (dcm *dockerClientManagerImpl) EnsureConnection(ctx context.Context) error 
 		return errors.Wrap(err, "failed to create SSH tunnel")
 	}
 
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"local_addr":  dcm.tunnel.LocalAddr(),
 		"remote_addr": remoteAddr,
 		"server_ip":   server.IPAddress,
@@ -263,7 +263,7 @@ func (dcm *dockerClientManagerImpl) Close() error {
 
 	// Stop port forwarding first
 	if err := dcm.StopPortForwarding(); err != nil {
-		dcm.logger.WithFields(map[string]interface{}{
+		dcm.logger.WithFields(map[string]any{
 			"error": err.Error(),
 		}).Error("Error stopping port forwarding during close")
 	}
@@ -291,7 +291,7 @@ func (dcm *dockerClientManagerImpl) isConnectionHealthy() bool {
 
 		_, err := dcm.dockerClient.Ping(ctx)
 		if err != nil {
-			dcm.logger.WithFields(map[string]interface{}{
+			dcm.logger.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Debug("Docker ping failed, connection unhealthy")
 			return false
@@ -329,7 +329,7 @@ func (dcm *dockerClientManagerImpl) getOrProvisionServer(ctx context.Context) (*
 		return nil, errors.Wrap(err, "failed to list servers")
 	}
 
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"total_servers": len(servers),
 	}).Debug("Listed servers from Hetzner")
 
@@ -339,7 +339,7 @@ func (dcm *dockerClientManagerImpl) getOrProvisionServer(ctx context.Context) (*
 
 	for _, server := range servers {
 		if strings.HasPrefix(server.Name, "dockbridge-") {
-			dcm.logger.WithFields(map[string]interface{}{
+			dcm.logger.WithFields(map[string]any{
 				"server_id":   server.ID,
 				"server_name": server.Name,
 				"server_ip":   server.IPAddress,
@@ -368,7 +368,7 @@ func (dcm *dockerClientManagerImpl) getOrProvisionServer(ctx context.Context) (*
 			go dcm.cleanupStaleServers(context.Background(), runningServers[1:])
 		}
 
-		dcm.logger.WithFields(map[string]interface{}{
+		dcm.logger.WithFields(map[string]any{
 			"server_id": selectedServer.ID,
 			"server_ip": selectedServer.IPAddress,
 		}).Info("Using existing DockBridge server")
@@ -487,7 +487,7 @@ echo "$(date): DockBridge server setup completed successfully"
 		return nil, errors.Wrap(err, "failed to provision server")
 	}
 
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"server_id":   server.ID,
 		"server_name": server.Name,
 		"server_ip":   server.IPAddress,
@@ -511,7 +511,7 @@ func (dcm *dockerClientManagerImpl) readOrGenerateSSHKey(privateKeyPath, publicK
 	}
 
 	// Generate new SSH key pair if it doesn't exist
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"private_key_path": privateKeyPath,
 		"public_key_path":  publicKeyPath,
 	}).Info("SSH key not found, generating new key pair")
@@ -538,7 +538,7 @@ func (dcm *dockerClientManagerImpl) generateSSHKey(keyPath string) error {
 		return errors.Wrap(err, "failed to generate SSH key")
 	}
 
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"private_key": keyPath,
 		"public_key":  keyPath + ".pub",
 	}).Info("Generated SSH key pair")
@@ -548,7 +548,7 @@ func (dcm *dockerClientManagerImpl) generateSSHKey(keyPath string) error {
 
 // waitForServerReady waits for the server to be fully configured and Docker to be running
 func (dcm *dockerClientManagerImpl) waitForServerReady(ctx context.Context, server *hetzner.Server) error {
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"server_id": server.ID,
 	}).Info("Waiting for server to be ready")
 
@@ -565,7 +565,7 @@ func (dcm *dockerClientManagerImpl) waitForServerReady(ctx context.Context, serv
 			return ctx.Err()
 		case <-timeout:
 			elapsed := time.Since(startTime)
-			dcm.logger.WithFields(map[string]interface{}{
+			dcm.logger.WithFields(map[string]any{
 				"server_id": server.ID,
 				"attempts":  attempt,
 				"elapsed":   elapsed.String(),
@@ -574,14 +574,14 @@ func (dcm *dockerClientManagerImpl) waitForServerReady(ctx context.Context, serv
 		case <-ticker.C:
 			attempt++
 			elapsed := time.Since(startTime)
-			dcm.logger.WithFields(map[string]interface{}{
+			dcm.logger.WithFields(map[string]any{
 				"server_id": server.ID,
 				"attempt":   attempt,
 				"elapsed":   elapsed.String(),
 			}).Info("Checking server readiness")
 
 			if dcm.checkServerReady(ctx, server) {
-				dcm.logger.WithFields(map[string]interface{}{
+				dcm.logger.WithFields(map[string]any{
 					"server_id": server.ID,
 					"attempts":  attempt,
 					"elapsed":   elapsed.String(),
@@ -611,7 +611,7 @@ func (dcm *dockerClientManagerImpl) checkServerReady(ctx context.Context, server
 
 	// Try to connect
 	if err := tempSSHClient.Connect(checkCtx); err != nil {
-		dcm.logger.WithFields(map[string]interface{}{
+		dcm.logger.WithFields(map[string]any{
 			"server_id": server.ID,
 			"server_ip": server.IPAddress,
 			"error":     err.Error(),
@@ -622,7 +622,7 @@ func (dcm *dockerClientManagerImpl) checkServerReady(ctx context.Context, server
 	// Check if Docker is running
 	output, err := tempSSHClient.ExecuteCommand(checkCtx, "docker version --format '{{.Server.Version}}'")
 	if err != nil {
-		dcm.logger.WithFields(map[string]interface{}{
+		dcm.logger.WithFields(map[string]any{
 			"server_id": server.ID,
 			"error":     err.Error(),
 		}).Debug("Server not ready - Docker daemon not responding")
@@ -630,7 +630,7 @@ func (dcm *dockerClientManagerImpl) checkServerReady(ctx context.Context, server
 	}
 
 	dockerVersion := strings.TrimSpace(string(output))
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"server_id":      server.ID,
 		"docker_version": dockerVersion,
 	}).Info("Server ready - Docker daemon is responding")
@@ -641,7 +641,7 @@ func (dcm *dockerClientManagerImpl) checkServerReady(ctx context.Context, server
 // cleanupStaleServers removes stale or duplicate servers in the background
 func (dcm *dockerClientManagerImpl) cleanupStaleServers(ctx context.Context, servers []*hetzner.Server) {
 	for _, server := range servers {
-		dcm.logger.WithFields(map[string]interface{}{
+		dcm.logger.WithFields(map[string]any{
 			"server_id":   server.ID,
 			"server_name": server.Name,
 			"status":      server.Status,
@@ -649,12 +649,12 @@ func (dcm *dockerClientManagerImpl) cleanupStaleServers(ctx context.Context, ser
 
 		serverID := fmt.Sprintf("%d", server.ID)
 		if err := dcm.hetznerClient.DestroyServer(ctx, serverID); err != nil {
-			dcm.logger.WithFields(map[string]interface{}{
+			dcm.logger.WithFields(map[string]any{
 				"server_id": server.ID,
 				"error":     err.Error(),
 			}).Error("Failed to cleanup stale server")
 		} else {
-			dcm.logger.WithFields(map[string]interface{}{
+			dcm.logger.WithFields(map[string]any{
 				"server_id": server.ID,
 			}).Info("Successfully cleaned up stale server")
 		}
@@ -715,7 +715,7 @@ func (dcm *dockerClientManagerImpl) StartPortForwarding(ctx context.Context) err
 		return errors.Wrap(err, "failed to start container monitor")
 	}
 
-	dcm.logger.WithFields(map[string]interface{}{
+	dcm.logger.WithFields(map[string]any{
 		"enabled":           dcm.portForwardConfig.Enabled,
 		"conflict_strategy": dcm.portForwardConfig.ConflictStrategy,
 		"monitor_interval":  dcm.portForwardConfig.MonitorInterval,
@@ -743,7 +743,7 @@ func (dcm *dockerClientManagerImpl) StopPortForwarding() error {
 	}
 
 	if len(errors) > 0 {
-		dcm.logger.WithFields(map[string]interface{}{
+		dcm.logger.WithFields(map[string]any{
 			"error_count": len(errors),
 		}).Error("Errors occurred while stopping port forwarding system")
 		return fmt.Errorf("multiple errors stopping port forwarding: %v", errors)

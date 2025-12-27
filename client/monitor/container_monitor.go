@@ -104,7 +104,7 @@ func (cm *containerMonitorImpl) Start(ctx context.Context) error {
 
 	// Initialize known containers state
 	if err := cm.initializeKnownContainers(); err != nil {
-		cm.logger.WithFields(map[string]interface{}{
+		cm.logger.WithFields(map[string]any{
 			"error": err.Error(),
 		}).Warn("Failed to initialize known containers state")
 	}
@@ -116,7 +116,7 @@ func (cm *containerMonitorImpl) Start(ctx context.Context) error {
 		cm.monitorContainers()
 	}()
 
-	cm.logger.WithFields(map[string]interface{}{
+	cm.logger.WithFields(map[string]any{
 		"polling_interval": cm.pollingInterval,
 		"handlers":         len(cm.handlers),
 	}).Info("Container monitor started")
@@ -153,7 +153,7 @@ func (cm *containerMonitorImpl) RegisterContainerEventHandler(handler ContainerE
 
 	cm.handlers = append(cm.handlers, handler)
 
-	cm.logger.WithFields(map[string]interface{}{
+	cm.logger.WithFields(map[string]any{
 		"total_handlers": len(cm.handlers),
 	}).Debug("Container event handler registered")
 
@@ -173,7 +173,7 @@ func (cm *containerMonitorImpl) ListRunningContainers(ctx context.Context) ([]*C
 	for _, c := range containers {
 		containerInfo, err := cm.convertToContainerInfo(c)
 		if err != nil {
-			cm.logger.WithFields(map[string]interface{}{
+			cm.logger.WithFields(map[string]any{
 				"container_id": c.ID,
 				"error":        err.Error(),
 			}).Warn("Failed to convert container info")
@@ -202,7 +202,7 @@ func (cm *containerMonitorImpl) SetPollingInterval(interval time.Duration) error
 
 	cm.pollingInterval = interval
 
-	cm.logger.WithFields(map[string]interface{}{
+	cm.logger.WithFields(map[string]any{
 		"polling_interval": interval,
 	}).Info("Container monitor polling interval updated")
 
@@ -220,7 +220,7 @@ func (cm *containerMonitorImpl) initializeKnownContainers() error {
 		cm.knownContainers[container.ID] = container
 	}
 
-	cm.logger.WithFields(map[string]interface{}{
+	cm.logger.WithFields(map[string]any{
 		"initial_containers": len(containers),
 	}).Debug("Initialized known containers state")
 
@@ -238,7 +238,7 @@ func (cm *containerMonitorImpl) monitorContainers() {
 			return
 		case <-ticker.C:
 			if err := cm.checkContainerChanges(); err != nil {
-				cm.logger.WithFields(map[string]interface{}{
+				cm.logger.WithFields(map[string]any{
 					"error": err.Error(),
 				}).Error("Error checking container changes")
 			}
@@ -266,7 +266,7 @@ func (cm *containerMonitorImpl) checkContainerChanges() error {
 	// Check for new containers (created)
 	for containerID, container := range currentMap {
 		if _, exists := cm.knownContainers[containerID]; !exists {
-			cm.logger.WithFields(map[string]interface{}{
+			cm.logger.WithFields(map[string]any{
 				"container_id":   containerID,
 				"container_name": container.Name,
 				"image":          container.Image,
@@ -275,7 +275,7 @@ func (cm *containerMonitorImpl) checkContainerChanges() error {
 			// Notify handlers about container creation
 			for _, handler := range cm.handlers {
 				if err := handler.OnContainerCreated(container); err != nil {
-					cm.logger.WithFields(map[string]interface{}{
+					cm.logger.WithFields(map[string]any{
 						"container_id": containerID,
 						"error":        err.Error(),
 					}).Error("Handler failed to process container created event")
@@ -289,7 +289,7 @@ func (cm *containerMonitorImpl) checkContainerChanges() error {
 	// Check for removed/stopped containers
 	for containerID, container := range cm.knownContainers {
 		if _, exists := currentMap[containerID]; !exists {
-			cm.logger.WithFields(map[string]interface{}{
+			cm.logger.WithFields(map[string]any{
 				"container_id":   containerID,
 				"container_name": container.Name,
 			}).Debug("Container stopped/removed detected")
@@ -299,13 +299,13 @@ func (cm *containerMonitorImpl) checkContainerChanges() error {
 			containerJSON, err := cm.dockerClient.ContainerInspect(cm.ctx, containerID)
 			if err != nil {
 				// Container not found - it was removed
-				cm.logger.WithFields(map[string]interface{}{
+				cm.logger.WithFields(map[string]any{
 					"container_id": containerID,
 				}).Debug("Container was removed")
 
 				for _, handler := range cm.handlers {
 					if err := handler.OnContainerRemoved(containerID); err != nil {
-						cm.logger.WithFields(map[string]interface{}{
+						cm.logger.WithFields(map[string]any{
 							"container_id": containerID,
 							"error":        err.Error(),
 						}).Error("Handler failed to process container removed event")
@@ -313,14 +313,14 @@ func (cm *containerMonitorImpl) checkContainerChanges() error {
 				}
 			} else if !containerJSON.State.Running {
 				// Container exists but is not running - it was stopped
-				cm.logger.WithFields(map[string]interface{}{
+				cm.logger.WithFields(map[string]any{
 					"container_id": containerID,
 					"status":       containerJSON.State.Status,
 				}).Debug("Container was stopped")
 
 				for _, handler := range cm.handlers {
 					if err := handler.OnContainerStopped(containerID); err != nil {
-						cm.logger.WithFields(map[string]interface{}{
+						cm.logger.WithFields(map[string]any{
 							"container_id": containerID,
 							"error":        err.Error(),
 						}).Error("Handler failed to process container stopped event")

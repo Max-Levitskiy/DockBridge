@@ -149,8 +149,7 @@ func BenchmarkCloudInitGeneration(b *testing.B) {
 		VolumeMount:  "/var/lib/docker",
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = GenerateCloudInitScript(config)
 	}
 }
