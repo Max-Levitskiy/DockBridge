@@ -36,3 +36,4 @@ test-lifecycle
 ~
 *.log
 *.DS_Store
+.task/

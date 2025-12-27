@@ -1,0 +1,114 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  BINARY_NAME: dockbridge
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the binary
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY_NAME}}"
+    cmds:
+      - go build -o {{.BINARY_NAME}} ./cmd/dockbridge
+
+  test:
+    desc: Run tests
+    sources:
+      - ./**/*.go
+    cmds:
+      - go test ./...
+
+  lint:
+    desc: Run golangci-lint (only if Go files changed)
+    sources:
+      - ./**/*.go
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  check:
+    desc: Run all checks (fmt, lint, test) - for pre-commit
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+
+  # Git hooks
+  hooks:install:
+    desc: Install git pre-commit hook
+    cmds:
+      - |
+        cat > .git/hooks/pre-commit << 'EOF'
+        #!/bin/sh
+        # Run checks only on changed Go files
+        task check
+        EOF
+        chmod +x .git/hooks/pre-commit
+        echo "✅ Pre-commit hook installed (runs: task check)"
+
+  hooks:uninstall:
+    desc: Remove git pre-commit hook
+    cmds:
+      - rm -f .git/hooks/pre-commit
+      - echo "✅ Pre-commit hook removed"
+
+  # Release tasks
+  release:patch:
+    desc: Create a patch release (v1.0.0 -> v1.0.1)
+    cmds:
+      - task: release
+        vars: { BUMP: patch }
+
+  release:minor:
+    desc: Create a minor release (v1.0.0 -> v1.1.0)
+    cmds:
+      - task: release
+        vars: { BUMP: minor }
+
+  release:major:
+    desc: Create a major release (v1.0.0 -> v2.0.0)
+    cmds:
+      - task: release
+        vars: { BUMP: major }
+
+  release:
+    desc: Create and push a release tag
+    internal: true
+    vars:
+      CURRENT_TAG:
+        sh: git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"
+      MAJOR:
+        sh: echo {{.CURRENT_TAG}} | sed 's/v//' | cut -d. -f1
+      MINOR:
+        sh: echo {{.CURRENT_TAG}} | sed 's/v//' | cut -d. -f2
+      PATCH:
+        sh: echo {{.CURRENT_TAG}} | sed 's/v//' | cut -d. -f3
+      NEW_TAG:
+        sh: |
+          case "{{.BUMP}}" in
+            major) echo "v$(({{.MAJOR}}+1)).0.0" ;;
+            minor) echo "v{{.MAJOR}}.$(({{.MINOR}}+1)).0" ;;
+            patch) echo "v{{.MAJOR}}.{{.MINOR}}.$(({{.PATCH}}+1))" ;;
+          esac
+    cmds:
+      - echo "Current version{{":"}} {{.CURRENT_TAG}}"
+      - echo "New version{{":"}} {{.NEW_TAG}}"
+      - git tag {{.NEW_TAG}}
+      - git push origin {{.NEW_TAG}}
+      - echo "✅ Released {{.NEW_TAG}}"
+      - echo "GitHub Actions will now build and publish the release"
