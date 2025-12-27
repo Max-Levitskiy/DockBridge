@@ -4,7 +4,7 @@
 
 set -e
 
-REPO="dockbridge/dockbridge"
+REPO="Max-Levitskiy/DockBridge"
 BINARY="dockbridge"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
