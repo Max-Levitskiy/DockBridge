@@ -38,8 +38,7 @@ jobs:
       - name: Run gosec (ssh-docker-proxy)
         uses: securego/gosec@master
         with:
-          args: "-exclude=G104 -fmt sarif -out gosec-proxy.sarif ./..."
-        working-directory: ./ssh-docker-proxy
+          args: "-exclude=G104 -fmt sarif -out gosec-proxy.sarif ./ssh-docker-proxy/..."
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
