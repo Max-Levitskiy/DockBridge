@@ -40,10 +40,18 @@ jobs:
         with:
           args: "-exclude=G104 -fmt sarif -out gosec-proxy.sarif ./ssh-docker-proxy/..."
 
-      - name: Upload SARIF file
+      - name: Upload SARIF file (root)
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: .
+          sarif_file: gosec-root.sarif
+          category: gosec-root
+        if: always()
+
+      - name: Upload SARIF file (proxy)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gosec-proxy.sarif
+          category: gosec-proxy
         if: always()
 
   govulncheck:
