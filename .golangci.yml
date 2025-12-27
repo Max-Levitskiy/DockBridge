@@ -18,6 +18,7 @@ linters:
     - staticcheck
     - unused
     - ineffassign
+    - modernize
     # Temporarily disabled - too many false positives for cleanup code
     # - errcheck
 
