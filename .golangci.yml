@@ -5,20 +5,19 @@
 # TODO: Re-enable errcheck and fix issues in follow-up PR
 # See: https://github.com/dockbridge/dockbridge/issues/XX
 
-
+version: "2"
 
 run:
   timeout: 5m
 
 linters:
-  disable-all: true
+  default: none
   enable:
     # Core linters
     - govet
     - staticcheck
     - unused
     - ineffassign
-
     # Temporarily disabled - too many false positives for cleanup code
     # - errcheck
 
