@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 	"gopkg.in/yaml.v3"
 )
 

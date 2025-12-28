@@ -75,7 +75,7 @@ ssh: rejected: connect failed (open failed)
 panic: runtime error: invalid memory address or nil pointer dereference
 [signal SIGSEGV: segmentation violation code=0x2 addr=0x48 pc=0x102fb303c]
 goroutine 50 [running]:
-github.com/dockbridge/dockbridge/client/hetzner.convertServer(0x0)
+github.com/Max-Levitskiy/DockBridge/client/hetzner.convertServer(0x0)
 /Users/max/git/Max-Levitskiy/DockBridge/client/hetzner/utils.go:12 +0x1c
 ```
 

@@ -90,7 +90,7 @@ DockBridge/
 ### 5. Dependency Management Issues
 
 #### Module Structure
-- Main module: `github.com/dockbridge/dockbridge`
+- Main module: `github.com/Max-Levitskiy/DockBridge`
 - Sub-module: `ssh-docker-proxy` (separate go.mod)
 - Creates import path confusion
 - Complicates dependency management

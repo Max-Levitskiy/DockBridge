@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dockbridge/dockbridge/client/cli"
+	"github.com/Max-Levitskiy/DockBridge/client/cli"
 )
 
 func main() {

@@ -12,13 +12,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dockbridge/dockbridge/client/activity"
-	"github.com/dockbridge/dockbridge/client/hetzner"
-	"github.com/dockbridge/dockbridge/client/lifecycle"
-	"github.com/dockbridge/dockbridge/client/ssh"
-	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/dockbridge/dockbridge/server"
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/client/activity"
+	"github.com/Max-Levitskiy/DockBridge/client/hetzner"
+	"github.com/Max-Levitskiy/DockBridge/client/lifecycle"
+	"github.com/Max-Levitskiy/DockBridge/client/ssh"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/server"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 	"github.com/pkg/errors"
 )
 

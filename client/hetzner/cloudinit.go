@@ -453,7 +453,7 @@ func generateDockBridgeServerScript(config *CloudInitConfig) string {
     
     # Try to download binary from GitHub releases
     DOCKBRIDGE_VERSION="${DOCKBRIDGE_VERSION:-latest}"
-    DOWNLOAD_URL="https://github.com/dockbridge/dockbridge/releases/download/${DOCKBRIDGE_VERSION}/dockbridge-server-linux-amd64"
+    DOWNLOAD_URL="https://github.com/Max-Levitskiy/DockBridge/releases/download/${DOCKBRIDGE_VERSION}/dockbridge-server-linux-amd64"
     
     if curl -fsSL -o /usr/local/bin/dockbridge-server "${DOWNLOAD_URL}" 2>/dev/null; then
       chmod +x /usr/local/bin/dockbridge-server

@@ -170,7 +170,7 @@ cmd/dockbridge/
 - Ensure all existing dependencies are properly used
 
 ### Module Structure:
-- Keep main module as `github.com/dockbridge/dockbridge`
+- Keep main module as `github.com/Max-Levitskiy/DockBridge`
 - Integrate `ssh-docker-proxy` as local dependency, not separate module
 
 ## Testing Strategy

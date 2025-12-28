@@ -23,7 +23,7 @@ import (
     "log"
     "os"
     
-    "github.com/dockbridge/dockbridge/client/hetzner"
+    "github.com/Max-Levitskiy/DockBridge/client/hetzner"
 )
 
 func main() {

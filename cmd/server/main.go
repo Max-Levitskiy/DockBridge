@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/dockbridge/dockbridge/server/keepalive"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/server/keepalive"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

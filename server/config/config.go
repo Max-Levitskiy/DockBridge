@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 	"github.com/spf13/viper"
 )
 

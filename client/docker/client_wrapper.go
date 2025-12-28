@@ -3,7 +3,7 @@ package docker
 import (
 	"context"
 
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 	"github.com/docker/docker/client"
 )
 

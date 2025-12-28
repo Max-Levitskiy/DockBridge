@@ -105,7 +105,7 @@ func TestNoInternalImports(t *testing.T) {
 
 				// Check for internal import patterns
 				contentStr := string(content)
-				if strings.Contains(contentStr, "github.com/dockbridge/dockbridge/internal") {
+				if strings.Contains(contentStr, "github.com/Max-Levitskiy/DockBridge/internal") {
 					t.Errorf("File %s contains internal import", path)
 				}
 

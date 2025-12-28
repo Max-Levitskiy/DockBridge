@@ -3,7 +3,7 @@ package errors
 import (
 	"maps"
 
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 )
 
 // LogError logs an error with the appropriate level and context

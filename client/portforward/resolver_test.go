@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

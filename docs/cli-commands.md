@@ -88,7 +88,7 @@
 nterface Compatibility Fixes (2025-01-08)
 
 ### Do:
-- Fix SSH import paths from `github.com/dockbridge/dockbridge/client/ssh` to `github.com/dockbridge/dockbridge/internal/client/ssh`
+- Fix SSH import paths from `github.com/Max-Levitskiy/DockBridge/client/ssh` to `github.com/Max-Levitskiy/DockBridge/internal/client/ssh`
 - Ensure PortForwardManager interface properly implements ContainerEventHandler with correct method signatures
 - Use unit tests to verify interface compatibility: `go test ./internal/client/portforward/ -v -run TestPortForwardManagerImplementsContainerEventHandler`
 - Test compilation after interface fixes: `go build ./internal/client/docker/`

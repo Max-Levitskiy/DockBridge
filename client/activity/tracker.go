@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 )
 
 // ActivityType represents the type of activity

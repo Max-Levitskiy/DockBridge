@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dockbridge/dockbridge/client/monitor"
-	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/client/monitor"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 )
 
 // DemoPortForwarding demonstrates the port forwarding infrastructure

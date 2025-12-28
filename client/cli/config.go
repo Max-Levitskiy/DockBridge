@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/dockbridge/dockbridge/client/config"
+	"github.com/Max-Levitskiy/DockBridge/client/config"
 	"github.com/spf13/cobra"
 )
 

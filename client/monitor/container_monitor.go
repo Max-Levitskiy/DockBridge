@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/pkg/errors"
 )
