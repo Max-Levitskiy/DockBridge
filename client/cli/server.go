@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	clientconfig "github.com/dockbridge/dockbridge/client/config"
-	"github.com/dockbridge/dockbridge/client/hetzner"
+	clientconfig "github.com/Max-Levitskiy/DockBridge/client/config"
+	"github.com/Max-Levitskiy/DockBridge/client/hetzner"
 
-	"github.com/dockbridge/dockbridge/pkg/errors"
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/pkg/errors"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 	"github.com/spf13/cobra"
 )
 

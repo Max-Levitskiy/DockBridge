@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dockbridge/dockbridge/client/hetzner"
-	"github.com/dockbridge/dockbridge/client/monitor"
-	"github.com/dockbridge/dockbridge/client/portforward"
-	"github.com/dockbridge/dockbridge/client/ssh"
-	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/client/hetzner"
+	"github.com/Max-Levitskiy/DockBridge/client/monitor"
+	"github.com/Max-Levitskiy/DockBridge/client/portforward"
+	"github.com/Max-Levitskiy/DockBridge/client/ssh"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 )

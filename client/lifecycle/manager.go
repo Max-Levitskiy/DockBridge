@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dockbridge/dockbridge/client/activity"
-	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/dockbridge/dockbridge/server"
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/client/activity"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/server"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 )
 
 // Manager handles server lifecycle based on activity tracking

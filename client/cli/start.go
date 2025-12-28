@@ -8,11 +8,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/dockbridge/dockbridge/client/config"
-	"github.com/dockbridge/dockbridge/client/docker"
-	"github.com/dockbridge/dockbridge/client/hetzner"
-	"github.com/dockbridge/dockbridge/pkg/logger"
-	"github.com/dockbridge/dockbridge/server"
+	"github.com/Max-Levitskiy/DockBridge/client/config"
+	"github.com/Max-Levitskiy/DockBridge/client/docker"
+	"github.com/Max-Levitskiy/DockBridge/client/hetzner"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/server"
 	"github.com/spf13/cobra"
 )
 

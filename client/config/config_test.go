@@ -110,7 +110,9 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	}()
 
 	manager := NewManager()
-	err := manager.Load("")
+	// Use a non-existent config file to ensure we don't load any local config files
+	// that might interfere with environment variable testing
+	err := manager.Load("nonexistent-config-file.yaml")
 	require.NoError(t, err)
 
 	config := manager.GetConfig()

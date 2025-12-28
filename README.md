@@ -60,7 +60,7 @@ docker build .           # Fast x86 builds on x86 hardware
 
 ```bash
 # One-liner install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/dockbridge/dockbridge/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Max-Levitskiy/DockBridge/main/install.sh | sh
 ```
 
 <details>
@@ -68,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/dockbridge/dockbridge/main/install.
 
 ```bash
 # Build from source (requires Go 1.24+)
-git clone https://github.com/dockbridge/dockbridge
+git clone https://github.com/Max-Levitskiy/DockBridge
 cd dockbridge
 go build -o dockbridge ./cmd/dockbridge
 sudo mv dockbridge /usr/local/bin/
@@ -225,7 +225,7 @@ Currently only Hetzner is supported. AWS/GCP/Azure support is planned. PRs welco
 
 ```bash
 # Clone
-git clone https://github.com/dockbridge/dockbridge
+git clone https://github.com/Max-Levitskiy/DockBridge
 cd dockbridge
 
 # Run tests

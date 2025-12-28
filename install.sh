@@ -1,6 +1,6 @@
 #!/bin/sh
 # DockBridge installer script
-# Usage: curl -fsSL https://raw.githubusercontent.com/dockbridge/dockbridge/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/Max-Levitskiy/DockBridge/main/install.sh | sh
 
 set -e
 

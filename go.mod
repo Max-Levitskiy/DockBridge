@@ -1,4 +1,4 @@
-module github.com/dockbridge/dockbridge
+module github.com/Max-Levitskiy/DockBridge
 
 go 1.24.2
 

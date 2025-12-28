@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dockbridge/dockbridge/client/ssh"
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/client/ssh"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

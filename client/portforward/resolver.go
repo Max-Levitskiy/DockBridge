@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/dockbridge/dockbridge/shared/config"
+	"github.com/Max-Levitskiy/DockBridge/shared/config"
 )
 
 // PortConflictResolver defines the interface for resolving port conflicts

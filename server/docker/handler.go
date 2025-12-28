@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 )
 
 // HandlerConfig holds configuration for the Docker API handler.

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dockbridge/dockbridge/pkg/logger"
+	"github.com/Max-Levitskiy/DockBridge/pkg/logger"
 )
 
 // Config holds the configuration for the keep-alive monitor.

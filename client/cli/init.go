@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dockbridge/dockbridge/client/config"
+	"github.com/Max-Levitskiy/DockBridge/client/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

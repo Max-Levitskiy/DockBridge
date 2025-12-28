@@ -3,7 +3,7 @@
 #
 # NOTE: errcheck is temporarily disabled for initial open source launch.
 # TODO: Re-enable errcheck and fix issues in follow-up PR
-# See: https://github.com/dockbridge/dockbridge/issues/XX
+# See: https://github.com/Max-Levitskiy/DockBridge/issues/XX
 
 version: "2"
 
