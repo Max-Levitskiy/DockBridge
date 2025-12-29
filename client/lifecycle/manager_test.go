@@ -70,9 +70,8 @@ func TestManager_Stop(t *testing.T) {
 
 	// Setup config
 	cfg := &config.ActivityConfig{
-		IdleTimeout:       time.Minute,
-		ConnectionTimeout: time.Minute,
-		GracePeriod:       time.Second,
+		IdleTimeout: time.Minute,
+		GracePeriod: time.Second,
 	}
 
 	// Create manager

@@ -260,19 +260,9 @@ func (m *Manager) validateActivity() error {
 		return fmt.Errorf("idle_timeout must be at least 30 seconds, got %v", activity.IdleTimeout)
 	}
 
-	// Validate connection timeout - Allow short timeouts for testing but reasonable minimums
-	if activity.ConnectionTimeout < time.Minute {
-		return fmt.Errorf("connection_timeout must be at least 1 minute, got %v", activity.ConnectionTimeout)
-	}
-
 	// Validate grace period
 	if activity.GracePeriod < time.Second {
 		return fmt.Errorf("grace_period must be at least 1 second, got %v", activity.GracePeriod)
-	}
-
-	// Ensure connection timeout is longer than idle timeout
-	if activity.ConnectionTimeout <= activity.IdleTimeout {
-		return fmt.Errorf("connection_timeout (%v) must be greater than idle_timeout (%v)", activity.ConnectionTimeout, activity.IdleTimeout)
 	}
 
 	return nil
