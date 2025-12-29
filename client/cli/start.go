@@ -106,8 +106,7 @@ func startClient(configPath string) error {
 
 	fmt.Printf("Starting DockBridge daemon on socket: %s\n", cfg.Docker.SocketPath)
 	fmt.Printf("Using Hetzner server type: %s in location: %s\n", cfg.Hetzner.ServerType, cfg.Hetzner.Location)
-	fmt.Printf("Activity-based lifecycle: idle timeout %v, connection timeout %v\n",
-		cfg.Activity.IdleTimeout, cfg.Activity.ConnectionTimeout)
+	fmt.Printf("Activity-based lifecycle: idle timeout %v\n", cfg.Activity.IdleTimeout)
 	fmt.Println("Servers will be provisioned automatically when Docker commands are executed.")
 	fmt.Println("Servers will be automatically destroyed when inactive to save costs.")
 

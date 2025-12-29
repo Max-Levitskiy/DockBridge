@@ -409,6 +409,7 @@ echo "$(date): Starting DockBridge server setup"
 
 # Update system
 echo "$(date): Updating system packages"
+export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get upgrade -y
 
@@ -419,10 +420,14 @@ echo "%s" >> /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 chmod 700 /root/.ssh
 
-# Install Docker CE
-echo "$(date): Installing Docker CE"
-curl -fsSL https://get.docker.com -o get-docker.sh
-sh get-docker.sh
+# Install Docker CE only if not present
+if ! command -v docker &> /dev/null; then
+    echo "$(date): Installing Docker CE"
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+else
+    echo "$(date): Docker already installed, skipping installation"
+fi
 
 # Enable Docker service
 echo "$(date): Enabling Docker service"
@@ -620,8 +625,8 @@ func (dcm *dockerClientManagerImpl) checkServerReady(ctx context.Context, server
 		return false
 	}
 
-	// Check if Docker is running
-	output, err := tempSSHClient.ExecuteCommand(checkCtx, "docker version --format '{{.Server.Version}}'")
+	// Check if Docker is running and listening on TCP 2376
+	output, err := tempSSHClient.ExecuteCommand(checkCtx, "docker -H tcp://127.0.0.1:2376 version --format '{{.Server.Version}}'")
 	if err != nil {
 		dcm.logger.WithFields(map[string]any{
 			"server_id": server.ID,

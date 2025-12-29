@@ -20,16 +20,16 @@
 
 *Goal: Establish the directory structure and shared data models.*
 
-- [ ] T001 Create/Verify `gui/` directory structure and `gui/resources.go` for assets
-- [ ] T002 Initialize `gui/state.go` with `AppState` and `ServerStatus` definitions
+- [x] T001 Create/Verify `gui/` directory structure and `gui/resources.go` for assets
+- [x] T002 Initialize `gui/state.go` with `AppState` and `ServerStatus` definitions
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
 *Goal: Core app wiring and controller logic.*
 
-- [ ] T003 Create `gui/app.go` with `FyneApp` struct and constructor
-- [ ] T004 Implement `gui/controller.go` with gRPC connection logic and mock interface
-- [ ] T005 Create `client/cli/gui.go` to integrate GUI launch into main CLI
+- [x] T003 Create `gui/app.go` with `FyneApp` struct and constructor
+- [x] T004 Implement `gui/controller.go` with gRPC connection logic and mock interface
+- [x] T005 Create `client/cli/gui.go` to integrate GUI launch into main CLI
 
 ## Phase 3: System Tray (US1)
 
@@ -37,9 +37,9 @@
 
 **Dependencies**: Phase 2
 
-- [ ] T006 [P] [US1] Create `gui/tray_test.go` to verify menu item creation and status updates
-- [ ] T007 [US1] Implement `gui/tray.go` with `SetupTray` function and menu definitions
-- [ ] T008 [US1] Integrate `Tray` into `gui/app.go` lifecycle
+- [x] T006 [P] [US1] Create `gui/tray_test.go` to verify menu item creation and status updates
+- [x] T007 [US1] Implement `gui/tray.go` with `SetupTray` function and menu definitions
+- [x] T008 [US1] Integrate `Tray` into `gui/app.go` lifecycle
 
 ## Phase 4: Configuration Management (US2)
 
@@ -47,9 +47,9 @@
 
 **Dependencies**: Phase 2
 
-- [ ] T009 [P] [US2] Create `gui/window_settings_test.go` to verify form validation and save logic
-- [ ] T010 [US2] Implement `gui/window_settings.go` with Fyne form widgets
-- [ ] T011 [US2] Wire `SettingsWindow` to `client/config` for persistence in `gui/controller.go`
+- [x] T009 [P] [US2] Create `gui/window_settings_test.go` to verify form validation and save logic
+- [x] T010 [US2] Implement `gui/window_settings.go` with Fyne form widgets
+- [x] T011 [US2] Wire `SettingsWindow` to `client/config` for persistence in `gui/controller.go`
 
 ## Phase 5: VM and Proxy Control (US3)
 
@@ -57,9 +57,9 @@
 
 **Dependencies**: Phase 4 (Config needed for connection)
 
-- [ ] T012 [P] [US3] Create `gui/window_main_test.go` to verify button states and status display
-- [ ] T013 [US3] Implement `gui/window_main.go` with Start/Stop/Connect buttons
-- [ ] T014 [US3] Connect `MainWindow` actions to `Controller` methods
+- [x] T012 [P] [US3] Create `gui/window_main_test.go` to verify button states and status display
+- [x] T013 [US3] Implement `gui/window_main.go` with Start/Stop/Connect buttons
+- [x] T014 [US3] Connect `MainWindow` actions to `Controller` methods
 
 ## Phase 6: Cross-Platform Experience (US4)
 
@@ -67,10 +67,10 @@
 
 **Dependencies**: Phase 3, 5
 
-- [ ] T015 [US4] Verify build tags and flags in `Taskfile.yaml` for Windows/Linux/macOS
-- [ ] T016 [US4] Update `.github/workflows/release.yml` to include Windows build
+- [x] T015 [US4] Verify build tags and flags in `Taskfile.yaml` for Windows/Linux/macOS
+- [x] T016 [US4] Update `.github/workflows/release.yml` to include Windows build
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T017 Run full test suite `go test ./gui/...` and fix any regressions
+- [x] T017 Run full test suite `go test ./gui/...` and fix any regressions
 - [ ] T018 Manual verification of full flow: Config -> Start -> Connect -> System Tray -> Quit

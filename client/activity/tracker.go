@@ -157,22 +157,10 @@ func (t *Tracker) GetTimeUntilShutdown() (time.Duration, string) {
 		return 0, "idle_timeout"
 	}
 
-	// Check connection timeout (no connection activity)
-	timeSinceLastConn := now.Sub(t.lastConn)
-	if timeSinceLastConn >= t.config.ConnectionTimeout {
-		return 0, "connection_timeout"
-	}
-
-	// Calculate time until next timeout
+	// Calculate time until idle timeout
 	timeUntilIdleTimeout := t.config.IdleTimeout - timeSinceLastCmd
-	timeUntilConnTimeout := t.config.ConnectionTimeout - timeSinceLastConn
 
-	// Return the shorter timeout
-	if timeUntilIdleTimeout < timeUntilConnTimeout {
-		return timeUntilIdleTimeout, "approaching_idle_timeout"
-	}
-
-	return timeUntilConnTimeout, "approaching_connection_timeout"
+	return timeUntilIdleTimeout, "approaching_idle_timeout"
 }
 
 // RegisterCallback registers a callback for activity events

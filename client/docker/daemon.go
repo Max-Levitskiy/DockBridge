@@ -84,9 +84,8 @@ func (d *DockBridgeDaemon) Start(ctx context.Context, config *DaemonConfig) erro
 	d.logger.Info("Activity tracker started successfully")
 
 	d.logger.WithFields(map[string]any{
-		"idle_timeout":       d.config.ActivityConfig.IdleTimeout,
-		"connection_timeout": d.config.ActivityConfig.ConnectionTimeout,
-		"grace_period":       d.config.ActivityConfig.GracePeriod,
+		"idle_timeout": d.config.ActivityConfig.IdleTimeout,
+		"grace_period": d.config.ActivityConfig.GracePeriod,
 	}).Info("Starting lifecycle manager with activity-based timeouts...")
 
 	if err := d.lifecycleManager.Start(d.ctx); err != nil {

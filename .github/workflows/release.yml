@@ -42,6 +42,13 @@ jobs:
             done
           done
 
+          # Build client for Windows (with windowsgui flag to hide console in GUI mode)
+          for GOARCH in amd64 arm64; do
+            echo "Building dockbridge for windows/$GOARCH..."
+            GOOS=windows GOARCH=$GOARCH go build -ldflags="-s -w -H=windowsgui -X main.Version=${{ github.ref_name }}" \
+              -o dist/dockbridge-windows-$GOARCH.exe ./cmd/dockbridge
+          done
+
           # Build server for Linux only (runs on Hetzner)
           for GOARCH in amd64 arm64; do
             echo "Building dockbridge-server for linux/$GOARCH..."

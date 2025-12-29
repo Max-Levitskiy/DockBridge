@@ -53,9 +53,8 @@ type SSHConfig struct {
 
 // ActivityConfig contains activity tracking and timeout configuration
 type ActivityConfig struct {
-	IdleTimeout       time.Duration `yaml:"idle_timeout" mapstructure:"idle_timeout" default:"5m"`
-	ConnectionTimeout time.Duration `yaml:"connection_timeout" mapstructure:"connection_timeout" default:"30m"`
-	GracePeriod       time.Duration `yaml:"grace_period" mapstructure:"grace_period" default:"30s"`
+	IdleTimeout time.Duration `yaml:"idle_timeout" mapstructure:"idle_timeout" default:"5m"`
+	GracePeriod time.Duration `yaml:"grace_period" mapstructure:"grace_period" default:"30s"`
 }
 
 // LoggingConfig contains logging configuration
