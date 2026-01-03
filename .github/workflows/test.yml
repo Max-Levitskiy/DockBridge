@@ -73,14 +73,6 @@ jobs:
         with:
           version: 3.x
 
-      - name: Build client
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 1
-        run: |
-          go build -v -o dist/dockbridge-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/dockbridge
-
       - name: Build server
         env:
           GOOS: ${{ matrix.goos }}
@@ -88,6 +80,14 @@ jobs:
           CGO_ENABLED: 0
         run: |
           go build -v -o dist/dockbridge-server-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/server
+
+      - name: Build client
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ (matrix.goos == 'linux' && matrix.goarch == 'arm64') && '0' || '1' }}
+        run: |
+          go build -v -o dist/dockbridge-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/dockbridge
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
