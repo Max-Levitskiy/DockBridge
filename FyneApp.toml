@@ -1,0 +1,9 @@
+Website = "https://github.com/Max-Levitskiy/DockBridge"
+
+
+[Details]
+Icon = "gui/assets/icon.png"
+Name = "DockBridge"
+ID = "com.dockbridge.client"
+Version = "1.0.0"
+Build = 1

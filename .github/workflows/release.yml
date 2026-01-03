@@ -11,7 +11,10 @@ env:
 jobs:
   release:
     name: Release
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     permissions:
       contents: write
     steps:
@@ -29,35 +32,48 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
-      - name: Build all binaries
+      - name: Install Fyne
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      - name: Install Linux dependencies (Linux vs Cross-Compile)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+
+      - name: Package Application
         run: |
           mkdir -p dist
+          # Get version from tag
+          VERSION=${GITHUB_REF_NAME#v}
 
-          # Build client for all platforms
-          for GOOS in linux darwin; do
-            for GOARCH in amd64 arm64; do
-              echo "Building dockbridge for $GOOS/$GOARCH..."
-              GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
-                -o dist/dockbridge-$GOOS-$GOARCH ./cmd/dockbridge
-            done
-          done
+          # Use PWD to start with absolute path, assuming we start in repo root
+          REPO_ROOT=$(pwd)
 
-          # Build client for Windows (with windowsgui flag to hide console in GUI mode)
-          for GOARCH in amd64 arm64; do
-            echo "Building dockbridge for windows/$GOARCH..."
-            GOOS=windows GOARCH=$GOARCH go build -ldflags="-s -w -H=windowsgui -X main.Version=${{ github.ref_name }}" \
-              -o dist/dockbridge-windows-$GOARCH.exe ./cmd/dockbridge
-          done
+          if [ "${{ runner.os }}" == "Windows" ]; then
+             fyne package -os windows -icon "$REPO_ROOT/gui/assets/icon.png" -name DockBridge.exe -appVersion $VERSION -appBuild 1 -src ./cmd/dockbridge-gui
+             mv DockBridge.exe dist/dockbridge-windows-amd64.exe
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+             fyne package -os darwin -icon "$REPO_ROOT/gui/assets/icon.png" -name DockBridge -appVersion $VERSION -appBuild 1 -src ./cmd/dockbridge-gui
+             # Create a zip of the .app for distribution (Fyne produces .app package)
+             zip -r dist/dockbridge-macos-amd64.app.zip DockBridge.app
+          else
+             # Linux
+             fyne package -os linux -icon "$REPO_ROOT/gui/assets/icon.png" -name DockBridge -appVersion $VERSION -appBuild 1 -src ./cmd/dockbridge-gui
+             mv DockBridge.tar.gz dist/dockbridge-linux-amd64.tar.gz
+          fi
 
-          # Build server for Linux only (runs on Hetzner)
-          for GOARCH in amd64 arm64; do
-            echo "Building dockbridge-server for linux/$GOARCH..."
-            GOOS=linux GOARCH=$GOARCH go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
-              -o dist/dockbridge-server-linux-$GOARCH ./cmd/server
-          done
+      - name: Build Server (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -o dist/dockbridge-server-linux-amd64 ./cmd/server
 
-          # Create checksums
-          cd dist && sha256sum * > checksums.txt
+      - name: Generate Checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum * > checksums.txt || shasum -a 256 * > checksums.txt
 
       - name: Generate changelog
         id: changelog

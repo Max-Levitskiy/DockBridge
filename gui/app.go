@@ -18,6 +18,7 @@ type FyneApp struct {
 // NewFyneApp creates a new FyneApp instance.
 func NewFyneApp() *FyneApp {
 	fyneApp := app.NewWithID("com.dockbridge.client")
+	fyneApp.SetIcon(ResourceIcon)
 	state := NewAppState()
 	controller := NewController(state)
 
