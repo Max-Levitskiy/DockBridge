@@ -29,6 +29,33 @@ tasks:
     cmds:
       - go test ./...
 
+  package:mac:
+    desc: Package the app for macOS
+    cmds:
+      - echo "Packaging for macOS..."
+      - mkdir -p bin
+      - fyne package -os darwin -icon {{.TASKFILE_DIR}}/gui/assets/icon.png -name DockBridge -src ./cmd/dockbridge-gui
+      - mv DockBridge.app bin/
+      - echo "Packaging complete (Mac)"
+
+  package:windows:
+    desc: Package the app for Windows
+    cmds:
+      - echo "Packaging for Windows..."
+      - mkdir -p bin
+      - fyne package -os windows -icon {{.TASKFILE_DIR}}/gui/assets/icon.png -name DockBridge.exe -src ./cmd/dockbridge-gui
+      - mv DockBridge.exe bin/
+      - echo "Packaging complete (Windows)"
+
+  package:linux:
+    desc: Package the app for Linux
+    cmds:
+      - echo "Packaging for Linux..."
+      - mkdir -p bin
+      - fyne package -os linux -icon {{.TASKFILE_DIR}}/gui/assets/icon.png -name DockBridge -src ./cmd/dockbridge-gui
+      - mv DockBridge.tar.xz bin/ || mv DockBridge bin/
+      - echo "Packaging complete (Linux)"
+
   lint:
     desc: Run golangci-lint (only if Go files changed)
     deps: [golangci-lint:install]

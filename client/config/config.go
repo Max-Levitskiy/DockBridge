@@ -55,6 +55,11 @@ func (m *Manager) Load(configPath string) error {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	// Expand paths
+	if err := m.expandPaths(); err != nil {
+		return fmt.Errorf("failed to expand paths: %w", err)
+	}
+
 	// Validate configuration
 	if err := m.validate(); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
@@ -145,6 +150,50 @@ func (m *Manager) setDefaults() {
 	m.viper.SetDefault("port_forward.monitor_interval", "30s")
 }
 
+// expandPaths expands special characters (like ~) in configuration paths
+func (m *Manager) expandPaths() error {
+	var err error
+
+	// Expand Docker socket path
+	if m.config.Docker.SocketPath != "" {
+		if m.config.Docker.SocketPath, err = expandPath(m.config.Docker.SocketPath); err != nil {
+			return fmt.Errorf("failed to expand docker socket path: %w", err)
+		}
+	}
+
+	// Expand SSH key path
+	if m.config.SSH.KeyPath != "" {
+		if m.config.SSH.KeyPath, err = expandPath(m.config.SSH.KeyPath); err != nil {
+			return fmt.Errorf("failed to expand ssh key path: %w", err)
+		}
+	}
+
+	// Expand log output if it's a file path
+	if strings.HasPrefix(m.config.Logging.Output, "~/") {
+		if m.config.Logging.Output, err = expandPath(m.config.Logging.Output); err != nil {
+			return fmt.Errorf("failed to expand log output path: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// expandPath expands the tilde (~) to the user's home directory
+func expandPath(path string) (string, error) {
+	if strings.HasPrefix(path, "~/") || path == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+
+		if path == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, path[2:]), nil
+	}
+	return path, nil
+}
+
 // validate performs comprehensive configuration validation
 func (m *Manager) validate() error {
 	var errors []string
@@ -226,10 +275,10 @@ func (m *Manager) validateDocker() error {
 
 	// Validate socket path directory exists and is writable (DockBridge will create the socket)
 	if docker.SocketPath != "/var/run/docker.sock" && docker.SocketPath != "tcp" && !strings.HasPrefix(docker.SocketPath, ":") {
-		// Check if the directory exists and is writable
+		// Create directory if it doesn't exist
 		dir := filepath.Dir(docker.SocketPath)
-		if _, err := os.Stat(dir); err != nil {
-			return fmt.Errorf("directory for docker socket path '%s' does not exist: %s", docker.SocketPath, dir)
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return fmt.Errorf("cannot create directory for docker socket path '%s': %s", docker.SocketPath, dir)
 		}
 
 		// Test if we can write to the directory by creating a temporary file
