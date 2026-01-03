@@ -23,6 +23,8 @@ type HetznerClient interface {
 	ListServers(ctx context.Context) ([]*Server, error)
 	GetVolume(ctx context.Context, volumeID string) (*Volume, error)
 	ListVolumes(ctx context.Context) ([]*Volume, error)
+	ListServerTypes(ctx context.Context, location string) ([]ServerTypeInfo, error)
+	ListLocations(ctx context.Context) ([]LocationInfo, error)
 }
 
 // Client implements the HetznerClient interface
@@ -30,6 +32,8 @@ type Client struct {
 	hcloud *hcloud.Client
 	config *Config
 }
+
+// ... existing code ...
 
 // Config holds the Hetzner client configuration
 type Config struct {
@@ -158,8 +162,12 @@ func (c *Client) ProvisionServer(ctx context.Context, config *ServerConfig) (*Se
 		Name:       config.Name,
 		ServerType: serverType,
 		Image:      image,
-		Location:   location,
 	}
+
+	// Force clean Location object
+	// Force clean Location object
+	opts.Location = &hcloud.Location{Name: location.Name}
+	fmt.Printf("DEBUG: Forcing clean Location object with Name=%s\n", location.Name)
 
 	// Add UserData (now guaranteed to be set)
 	opts.UserData = config.UserData
@@ -479,4 +487,102 @@ func (c *Client) ListVolumes(ctx context.Context) ([]*Volume, error) {
 	}
 
 	return result, nil
+}
+
+// LocationInfo contains details about a location
+type LocationInfo struct {
+	Name        string
+	Description string
+	City        string
+	Country     string
+}
+
+// ListLocations retrieves all available locations
+func (c *Client) ListLocations(ctx context.Context) ([]LocationInfo, error) {
+	locations, err := c.hcloud.Location.All(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list locations")
+	}
+
+	var results []LocationInfo
+	for _, loc := range locations {
+		results = append(results, LocationInfo{
+			Name:        loc.Name,
+			Description: loc.Description,
+			City:        loc.City,
+			Country:     loc.Country,
+		})
+	}
+	return results, nil
+}
+
+// ServerTypeInfo contains details about a server type including pricing
+type ServerTypeInfo struct {
+	Name         string
+	Cores        int
+	Memory       float32
+	Disk         int
+	Description  string
+	PriceHourly  string
+	PriceMonthly string
+}
+
+// ListServerTypes retrieves all available server types with details, optionally filtered by location
+// If location is empty, it uses the configured default location
+func (c *Client) ListServerTypes(ctx context.Context, location string) ([]ServerTypeInfo, error) {
+	serverTypes, err := c.hcloud.ServerType.All(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list server types")
+	}
+
+	var results []ServerTypeInfo
+
+	// Use provided location or fallback to config
+	targetLocation := location
+	if targetLocation == "" {
+		targetLocation = c.config.Location
+	}
+
+	for _, st := range serverTypes {
+		info := ServerTypeInfo{
+			Name:        st.Name,
+			Cores:       st.Cores,
+			Memory:      st.Memory,
+			Disk:        st.Disk,
+			Description: st.Description,
+		}
+
+		// Find pricing for the target location
+		for _, pricing := range st.Pricings {
+			if pricing.Location.Name == targetLocation {
+				// Format prices (Gross is a string in the SDK)
+				info.PriceHourly = fmt.Sprintf("€%s", pricing.Hourly.Gross)
+				info.PriceMonthly = fmt.Sprintf("€%s", pricing.Monthly.Gross)
+				break
+			}
+		}
+
+		// If no specific location pricing found, try to find a default or "fsn1" as fallback
+		// Only if we haven't found a price yet (meaning the type might not be available in targetLocation,
+		// or we just want *some* price if location wasn't critical)
+		// But if checking for specific location availability, we might want to skip if price is missing?
+		// For now, let's keep the fallback behavior but maybe note it?
+		// Actually, if a user selects a location, they expect the price for THAT location.
+		// If it's not available there, maybe we shouldn't show it?
+		// But ListServerTypes usually returns globally available types.
+		// Let's stick to showing it with fallback price if exact location match fails,
+		// but ideally we should probably filter out types not available in the region if strictly required.
+		// However, hcloud.ServerType.All returns all types. pricing.Location check confirms availability/price.
+
+		if info.PriceHourly == "" && len(st.Pricings) > 0 {
+			// fallback to the first available price
+			p := st.Pricings[0]
+			info.PriceHourly = fmt.Sprintf("€%s (at %s)", p.Hourly.Gross, p.Location.Name)
+			info.PriceMonthly = fmt.Sprintf("€%s (at %s)", p.Monthly.Gross, p.Location.Name)
+		}
+
+		results = append(results, info)
+	}
+
+	return results, nil
 }

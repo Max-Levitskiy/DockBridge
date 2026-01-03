@@ -41,8 +41,6 @@ func (t *Tray) Setup() {
 // buildMenu creates the tray menu structure.
 func (t *Tray) buildMenu() *fyne.Menu {
 	return fyne.NewMenu("DockBridge",
-		fyne.NewMenuItem("Status: "+t.state.GetStatus().String(), nil),
-		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Show Dashboard", func() {
 			if t.mainWindowCallback != nil {
 				t.mainWindowCallback()

@@ -85,6 +85,9 @@ type dockerClientManagerImpl struct {
 
 	// Activity tracking (optional)
 	activityTracker any
+
+	// Volume configuration
+	volumeID string
 }
 
 // NewDockerClientManager creates a new Docker client manager
@@ -109,13 +112,14 @@ func NewDockerClientManagerWithPortForwarding(hetznerClient hetzner.HetznerClien
 }
 
 // NewDockerClientManagerWithActivity creates a new Docker client manager with activity tracking support
-func NewDockerClientManagerWithActivity(hetznerClient hetzner.HetznerClient, sshConfig *config.SSHConfig, hetznerConfig *config.HetznerConfig, logger logger.LoggerInterface, activityTracker any) DockerClientManager {
+func NewDockerClientManagerWithActivity(hetznerClient hetzner.HetznerClient, sshConfig *config.SSHConfig, hetznerConfig *config.HetznerConfig, logger logger.LoggerInterface, activityTracker any, volumeID string) DockerClientManager {
 	return &dockerClientManagerImpl{
 		hetznerClient:   hetznerClient,
 		sshConfig:       sshConfig,
 		hetznerConfig:   hetznerConfig,
 		logger:          logger,
 		activityTracker: activityTracker,
+		volumeID:        volumeID,
 	}
 }
 
@@ -355,8 +359,18 @@ func (dcm *dockerClientManagerImpl) getOrProvisionServer(ctx context.Context) (*
 	}
 
 	// Clean up stale servers in background
+	// Clean up stale servers
 	if len(staleServers) > 0 {
-		go dcm.cleanupStaleServers(context.Background(), staleServers)
+		// If we found a running server, we can cleanup in background
+		// If not, we must cleanup synchronously to free up the volume
+		if len(runningServers) > 0 {
+			go dcm.cleanupStaleServers(context.Background(), staleServers)
+		} else {
+			dcm.logger.WithFields(map[string]any{
+				"stale_count": len(staleServers),
+			}).Info("Cleaning up stale servers synchronously before provisioning")
+			dcm.cleanupStaleServers(ctx, staleServers)
+		}
 	}
 
 	// If we have running servers, use the first one (cleanup extras in background)
@@ -485,6 +499,7 @@ echo "$(date): DockBridge server setup completed successfully"
 		Location:   dcm.hetznerConfig.Location,
 		UserData:   cloudInitScript,
 		SSHKeyID:   sshKey.ID,
+		VolumeID:   dcm.volumeID,
 	}
 
 	server, err := dcm.hetznerClient.ProvisionServer(ctx, serverConfig)
@@ -651,7 +666,26 @@ func (dcm *dockerClientManagerImpl) cleanupStaleServers(ctx context.Context, ser
 			"server_id":   server.ID,
 			"server_name": server.Name,
 			"status":      server.Status,
+			"volume_id":   server.VolumeID,
 		}).Info("Cleaning up stale DockBridge server")
+
+		// Explicitly detach volume if it matches our volume ID
+		// This ensures volume is free for the new server
+		if dcm.volumeID != "" && stripVolumeID(server.VolumeID) == stripVolumeID(dcm.volumeID) {
+			dcm.logger.WithFields(map[string]any{
+				"volume_id": server.VolumeID,
+				"server_id": server.ID,
+			}).Info("Detaching volume from stale server")
+
+			if err := dcm.hetznerClient.DetachVolume(ctx, server.VolumeID); err != nil {
+				dcm.logger.WithFields(map[string]any{
+					"error": err.Error(),
+				}).Warn("Failed to detach volume (might already be detached)")
+			} else {
+				// Wait for volume to be available
+				dcm.waitForVolumeAvailable(ctx, server.VolumeID)
+			}
+		}
 
 		serverID := fmt.Sprintf("%d", server.ID)
 		if err := dcm.hetznerClient.DestroyServer(ctx, serverID); err != nil {
@@ -665,6 +699,44 @@ func (dcm *dockerClientManagerImpl) cleanupStaleServers(ctx context.Context, ser
 			}).Info("Successfully cleaned up stale server")
 		}
 	}
+}
+
+// waitForVolumeAvailable waits for a volume to become available
+func (dcm *dockerClientManagerImpl) waitForVolumeAvailable(ctx context.Context, volumeID string) {
+	dcm.logger.WithFields(map[string]any{
+		"volume_id": volumeID,
+	}).Info("Waiting for volume to become available")
+
+	// Poll up to 30 seconds
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			dcm.logger.Warn("Timeout waiting for volume to become available")
+			return
+		case <-ticker.C:
+			volume, err := dcm.hetznerClient.GetVolume(timeoutCtx, volumeID)
+			if err != nil {
+				dcm.logger.WithFields(map[string]any{"error": err.Error()}).Warn("Failed to check volume status")
+				continue
+			}
+
+			if volume.Status == "available" {
+				dcm.logger.Info("Volume is now available")
+				return
+			}
+		}
+	}
+}
+
+// stripVolumeID removes any string prefixes if present/needed for comparison
+func stripVolumeID(id string) string {
+	return strings.TrimSpace(id)
 }
 
 // Port forwarding integration methods

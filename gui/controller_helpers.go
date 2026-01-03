@@ -2,6 +2,8 @@ package gui
 
 import (
 	"context"
+
+	"github.com/Max-Levitskiy/DockBridge/client/hetzner"
 )
 
 // updateServerIP fetches and updates the server IP in state.
@@ -21,15 +23,32 @@ func (c *Controller) updateServerIP() {
 		return
 	}
 
-	// Find DockBridge server
+	// Find running DockBridge server
+	// We iterate through all servers and find the one that is running and has an IP
+	var targetServer *hetzner.Server
 	for _, srv := range servers {
 		if len(srv.Name) >= 10 && srv.Name[:10] == "dockbridge" {
-			c.state.SetServerIP(srv.IPAddress)
-			c.log.WithFields(map[string]any{
-				"server_id": srv.ID,
-				"server_ip": srv.IPAddress,
-			}).Info("Found DockBridge server")
-			return
+			// Prioritize running servers
+			if srv.Status == "running" {
+				targetServer = srv
+				break
+			}
+			// Fallback to any dockbridge server if none running found yet
+			if targetServer == nil {
+				targetServer = srv
+			}
 		}
+	}
+
+	if targetServer != nil {
+		c.state.SetServerIP(targetServer.IPAddress)
+		c.log.WithFields(map[string]any{
+			"server_id": targetServer.ID,
+			"server_ip": targetServer.IPAddress,
+			"status":    targetServer.Status,
+		}).Info("Found DockBridge server")
+	} else {
+		// No server found
+		c.state.SetServerIP("")
 	}
 }
