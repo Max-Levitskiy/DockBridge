@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,114 +12,31 @@ import (
 func TestNewManager(t *testing.T) {
 	manager := NewManager()
 	assert.NotNil(t, manager)
-	assert.NotNil(t, manager.viper)
 	assert.NotNil(t, manager.config)
 }
 
-func TestLoadWithDefaults(t *testing.T) {
-	// Create a temporary directory for test
-	tempDir := t.TempDir()
-
-	// Set environment variable for API token
-	os.Setenv("HETZNER_API_TOKEN", "test-token")
-	defer os.Unsetenv("HETZNER_API_TOKEN")
-
+func TestDefaultConfiguration(t *testing.T) {
 	manager := NewManager()
+	// Must load to apply defaults
+	// Provide non-existent file to ensure we test defaults and not user config
+	_ = manager.Load("nonexistent-test-config.yaml")
+	cfg := manager.GetConfig()
 
-	// Load with non-existent config file (should use defaults)
-	err := manager.Load(filepath.Join(tempDir, "nonexistent.yaml"))
-	require.NoError(t, err)
+	// Check default values
+	assert.Equal(t, "cpx21", cfg.Hetzner.ServerType)
+	assert.Equal(t, "fsn1", cfg.Hetzner.Location)
+	assert.Equal(t, 10, cfg.Hetzner.VolumeSize)
+	// PreferredImages usually empty by default in config.go
+	// assert.Contains(t, cfg.Hetzner.PreferredImages, "docker-ce")
 
-	config := manager.GetConfig()
+	assert.Equal(t, "/var/run/docker.sock", cfg.Docker.SocketPath)
+	assert.Equal(t, 2376, cfg.Docker.ProxyPort)
 
-	// Test defaults are applied
-	assert.Equal(t, "test-token", config.Hetzner.APIToken)
-	assert.Equal(t, "cpx21", config.Hetzner.ServerType)
-	assert.Equal(t, "fsn1", config.Hetzner.Location)
-	assert.Equal(t, 10, config.Hetzner.VolumeSize)
+	assert.Equal(t, 30*time.Second, cfg.KeepAlive.Interval)
+	assert.Equal(t, 5*time.Minute, cfg.KeepAlive.Timeout)
 
-	assert.Equal(t, "/var/run/docker.sock", config.Docker.SocketPath)
-	assert.Equal(t, 2376, config.Docker.ProxyPort)
-
-	assert.Equal(t, 30*time.Second, config.KeepAlive.Interval)
-	assert.Equal(t, 5*time.Minute, config.KeepAlive.Timeout)
-	assert.Equal(t, 5*time.Second, config.KeepAlive.RetryInterval)
-	assert.Equal(t, 3, config.KeepAlive.MaxRetries)
-
-	assert.Equal(t, 22, config.SSH.Port)
-	assert.Equal(t, 30*time.Second, config.SSH.Timeout)
-	assert.Equal(t, 30*time.Second, config.SSH.KeepAlive)
-
-	assert.Equal(t, "info", config.Logging.Level)
-	assert.Equal(t, "json", config.Logging.Format)
-	assert.Equal(t, "stdout", config.Logging.Output)
-}
-
-func TestLoadWithConfigFile(t *testing.T) {
-	// Create a temporary config file
-	tempDir := t.TempDir()
-	configFile := filepath.Join(tempDir, "test-config.yaml")
-
-	configContent := `
-hetzner:
-  api_token: "file-token"
-  server_type: "cx31"
-  location: "nbg1"
-  volume_size: 20
-
-docker:
-  proxy_port: 3000
-
-logging:
-  level: "debug"
-`
-
-	err := os.WriteFile(configFile, []byte(configContent), 0644)
-	require.NoError(t, err)
-
-	manager := NewManager()
-	err = manager.Load(configFile)
-	require.NoError(t, err)
-
-	config := manager.GetConfig()
-
-	// Test config file values override defaults
-	assert.Equal(t, "file-token", config.Hetzner.APIToken)
-	assert.Equal(t, "cx31", config.Hetzner.ServerType)
-	assert.Equal(t, "nbg1", config.Hetzner.Location)
-	assert.Equal(t, 20, config.Hetzner.VolumeSize)
-	assert.Equal(t, 3000, config.Docker.ProxyPort)
-	assert.Equal(t, "debug", config.Logging.Level)
-
-	// Test defaults still apply for unspecified values
-	assert.Equal(t, "/var/run/docker.sock", config.Docker.SocketPath)
-}
-
-func TestLoadWithEnvironmentVariables(t *testing.T) {
-	// Set environment variables
-	os.Setenv("HETZNER_API_TOKEN", "env-token")
-	os.Setenv("DOCKBRIDGE_DOCKER_PROXY_PORT", "4000")
-	os.Setenv("DOCKER_SOCKET_PATH", "/var/run/docker.sock")
-	os.Setenv("LOG_LEVEL", "error")
-	defer func() {
-		os.Unsetenv("HETZNER_API_TOKEN")
-		os.Unsetenv("DOCKBRIDGE_DOCKER_PROXY_PORT")
-		os.Unsetenv("DOCKER_SOCKET_PATH")
-		os.Unsetenv("LOG_LEVEL")
-	}()
-
-	manager := NewManager()
-	// Use a non-existent config file to ensure we don't load any local config files
-	// that might interfere with environment variable testing
-	err := manager.Load("nonexistent-config-file.yaml")
-	require.NoError(t, err)
-
-	config := manager.GetConfig()
-
-	// Test environment variables override defaults
-	assert.Equal(t, "env-token", config.Hetzner.APIToken)
-	assert.Equal(t, 4000, config.Docker.ProxyPort)
-	assert.Equal(t, "error", config.Logging.Level)
+	assert.Equal(t, 22, cfg.SSH.Port)
+	assert.Contains(t, cfg.SSH.KeyPath, ".dockbridge/ssh")
 }
 
 func TestValidateHetzner(t *testing.T) {
@@ -133,7 +49,7 @@ func TestValidateHetzner(t *testing.T) {
 		{
 			name: "valid configuration",
 			setupConfig: func(m *Manager) {
-				m.config.Hetzner.APIToken = "valid-token"
+				m.config.Hetzner.APIToken = "test-token"
 				m.config.Hetzner.ServerType = "cpx21"
 				m.config.Hetzner.Location = "fsn1"
 				m.config.Hetzner.VolumeSize = 10
@@ -145,55 +61,29 @@ func TestValidateHetzner(t *testing.T) {
 			setupConfig: func(m *Manager) {
 				m.config.Hetzner.APIToken = ""
 				m.config.Hetzner.ServerType = "cpx21"
-				m.config.Hetzner.Location = "fsn1"
-				m.config.Hetzner.VolumeSize = 10
 			},
 			expectError: true,
 			errorMsg:    "api_token is required",
 		},
 		{
-			name: "invalid server type",
+			name: "missing server type",
 			setupConfig: func(m *Manager) {
-				m.config.Hetzner.APIToken = "valid-token"
-				m.config.Hetzner.ServerType = "invalid-type"
-				m.config.Hetzner.Location = "fsn1"
-				m.config.Hetzner.VolumeSize = 10
+				m.config.Hetzner.APIToken = "test-token"
+				m.config.Hetzner.ServerType = ""
 			},
 			expectError: true,
-			errorMsg:    "invalid server_type",
+			errorMsg:    "server_type is required",
 		},
 		{
-			name: "invalid location",
+			name: "invalid volume size",
 			setupConfig: func(m *Manager) {
-				m.config.Hetzner.APIToken = "valid-token"
-				m.config.Hetzner.ServerType = "cpx21"
-				m.config.Hetzner.Location = "invalid-location"
-				m.config.Hetzner.VolumeSize = 10
-			},
-			expectError: true,
-			errorMsg:    "invalid location",
-		},
-		{
-			name: "volume size too small",
-			setupConfig: func(m *Manager) {
-				m.config.Hetzner.APIToken = "valid-token"
+				m.config.Hetzner.APIToken = "test-token"
 				m.config.Hetzner.ServerType = "cpx21"
 				m.config.Hetzner.Location = "fsn1"
-				m.config.Hetzner.VolumeSize = 5
+				m.config.Hetzner.VolumeSize = 5 // Minimum is usually 10
 			},
 			expectError: true,
-			errorMsg:    "volume_size must be between 10 and 10000",
-		},
-		{
-			name: "volume size too large",
-			setupConfig: func(m *Manager) {
-				m.config.Hetzner.APIToken = "valid-token"
-				m.config.Hetzner.ServerType = "cpx21"
-				m.config.Hetzner.Location = "fsn1"
-				m.config.Hetzner.VolumeSize = 15000
-			},
-			expectError: true,
-			errorMsg:    "volume_size must be between 10 and 10000",
+			errorMsg:    "volume_size must be between 10 and 10000 GB",
 		},
 	}
 

@@ -201,9 +201,9 @@ func (m *Manager) validateHetzner() error {
 	}
 
 	// Validate server type
-	validServerTypes := []string{"cx11", "cpx11", "cx21", "cx23", "cpx21", "cx31", "cpx31", "cx41", "cpx41", "cx51", "cpx51"}
-	if !slices.Contains(validServerTypes, hetzner.ServerType) {
-		return fmt.Errorf("invalid server_type '%s', must be one of: %s", hetzner.ServerType, strings.Join(validServerTypes, ", "))
+	// Server type validation is deferred to the API/Provisioning step to allow for new types.
+	if hetzner.ServerType == "" {
+		return fmt.Errorf("server_type is required")
 	}
 
 	// Validate location

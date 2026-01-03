@@ -80,13 +80,6 @@ func (lm *LifecycleManager) ProvisionServerWithVolume(ctx context.Context, confi
 	// Create server
 	server, err = lm.client.ProvisionServer(ctx, serverConfig)
 	if err != nil {
-		// Cleanup resources if server creation fails
-		if volume != nil {
-			lm.cleanupVolume(ctx, volume.ID)
-		}
-		if sshKey != nil {
-			lm.cleanupSSHKey(ctx, sshKey.ID)
-		}
 		return nil, errors.Wrap(err, "failed to provision server")
 	}
 
@@ -95,12 +88,6 @@ func (lm *LifecycleManager) ProvisionServerWithVolume(ctx context.Context, confi
 	if err != nil {
 		// Cleanup all resources if server doesn't become ready
 		lm.cleanupServer(ctx, server.ID)
-		if volume != nil {
-			lm.cleanupVolume(ctx, volume.ID)
-		}
-		if sshKey != nil {
-			lm.cleanupSSHKey(ctx, sshKey.ID)
-		}
 		return nil, errors.Wrap(err, "server failed to become ready")
 	}
 
@@ -151,7 +138,7 @@ func (lm *LifecycleManager) waitForServerReady(ctx context.Context, serverID int
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {

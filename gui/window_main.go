@@ -16,12 +16,11 @@ type MainWindow struct {
 	window     fyne.Window
 
 	// UI elements
-	statusLabel   *widget.Label
-	ipLabel       *widget.Label
-	errorLabel    *widget.Label
-	startButton   *widget.Button
-	stopButton    *widget.Button
-	connectButton *widget.Button
+	statusLabel *widget.Label
+	ipLabel     *widget.Label
+	errorLabel  *widget.Label
+	startButton *widget.Button
+	stopButton  *widget.Button
 }
 
 // NewMainWindow creates a new main window instance.
@@ -51,7 +50,6 @@ func (mw *MainWindow) buildUI() {
 	// Action buttons
 	mw.startButton = widget.NewButton("Start Server", mw.onStartServer)
 	mw.stopButton = widget.NewButton("Stop Server", mw.onStopServer)
-	mw.connectButton = widget.NewButton("Connect to Docker", mw.onConnect)
 
 	// Initial button states
 	mw.updateButtonStates()
@@ -68,7 +66,6 @@ func (mw *MainWindow) buildUI() {
 	buttonBox := container.NewHBox(
 		mw.startButton,
 		mw.stopButton,
-		mw.connectButton,
 	)
 
 	content := container.NewBorder(
@@ -105,12 +102,6 @@ func (mw *MainWindow) onStopServer() {
 	mw.updateButtonStates()
 }
 
-// onConnect handles the Connect to Docker button click.
-func (mw *MainWindow) onConnect() {
-	// TODO: Implement Docker connection logic
-	mw.errorLabel.SetText("Docker connection not yet implemented")
-}
-
 // onStatusChange is called when the application status changes.
 func (mw *MainWindow) onStatusChange(status ServerStatus) {
 	// All UI updates must run on the main Fyne thread
@@ -136,23 +127,18 @@ func (mw *MainWindow) updateButtonStates() {
 	case StatusStopped:
 		mw.startButton.Enable()
 		mw.stopButton.Disable()
-		mw.connectButton.Disable()
 	case StatusProvisioning:
 		mw.startButton.Disable()
 		mw.stopButton.Disable()
-		mw.connectButton.Disable()
 	case StatusRunning:
 		mw.startButton.Disable()
 		mw.stopButton.Enable()
-		mw.connectButton.Enable()
 	case StatusStopping:
 		mw.startButton.Disable()
 		mw.stopButton.Disable()
-		mw.connectButton.Disable()
 	case StatusError:
 		mw.startButton.Enable()
 		mw.stopButton.Disable()
-		mw.connectButton.Disable()
 	}
 }
 

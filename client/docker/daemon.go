@@ -45,6 +45,7 @@ type DaemonConfig struct {
 	HetznerConfig  *config.HetznerConfig
 	ActivityConfig *config.ActivityConfig
 	Logger         logger.LoggerInterface
+	VolumeID       string
 }
 
 // NewDockBridgeDaemon creates a new DockBridge daemon
@@ -203,6 +204,7 @@ func (d *DockBridgeDaemon) initializeComponents() error {
 		d.config.HetznerConfig,
 		d.logger,
 		d.activityTracker,
+		d.config.VolumeID,
 	)
 
 	return nil

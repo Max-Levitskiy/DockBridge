@@ -73,6 +73,16 @@ func (m *MockHetznerClient) ListVolumes(ctx context.Context) ([]*hetzner.Volume,
 	return args.Get(0).([]*hetzner.Volume), args.Error(1)
 }
 
+func (m *MockHetznerClient) ListServerTypes(ctx context.Context, location string) ([]hetzner.ServerTypeInfo, error) {
+	args := m.Called(ctx, location)
+	return args.Get(0).([]hetzner.ServerTypeInfo), args.Error(1)
+}
+
+func (m *MockHetznerClient) ListLocations(ctx context.Context) ([]hetzner.LocationInfo, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]hetzner.LocationInfo), args.Error(1)
+}
+
 func TestDockerClientManagerVolumeIntegration(t *testing.T) {
 	// Create mock Hetzner client
 	mockHetzner := &MockHetznerClient{}

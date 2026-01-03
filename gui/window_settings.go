@@ -138,7 +138,7 @@ func (sw *SettingsWindow) onSave() {
 }
 
 // saveConfig writes the configuration to a YAML file.
-func (sw *SettingsWindow) saveConfig(path string, cfg interface{}) error {
+func (sw *SettingsWindow) saveConfig(path string, cfg any) error {
 	// Use the same mechanism from client/cli/init.go
 	yamlData, err := yaml.Marshal(cfg)
 	if err != nil {
